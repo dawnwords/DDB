@@ -18,8 +18,7 @@ public interface TransactionManager extends Remote {
      */
     String RMIName = "TM";
 
-    boolean dieNow()
-            throws RemoteException;
+    boolean dieNow() throws RemoteException;
 
     void ping() throws RemoteException;
 

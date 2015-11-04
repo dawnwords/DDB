@@ -10,9 +10,7 @@ import java.rmi.RemoteException;
  * Description: toy implementation of the TM
  */
 
-public class TransactionManagerImpl
-        extends java.rmi.server.UnicastRemoteObject
-        implements TransactionManager {
+public class TransactionManagerImpl extends java.rmi.server.UnicastRemoteObject implements TransactionManager {
 
     public TransactionManagerImpl() throws RemoteException {
     }
@@ -43,8 +41,7 @@ public class TransactionManagerImpl
     public void enlist(int xid, ResourceManager rm) throws RemoteException {
     }
 
-    public boolean dieNow()
-            throws RemoteException {
+    public boolean dieNow() throws RemoteException {
         System.exit(1);
         return true; // We won't ever get here since we exited above;
         // but we still need it to please the compiler.
