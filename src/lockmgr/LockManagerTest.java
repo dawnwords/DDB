@@ -17,7 +17,6 @@ class LockManagerTest {
 
     static void test1() {
         System.out.println("Deadlock test");
-
         Transaction t1 = new Transaction(1, "rl a sl 3000 wl b ua");
         Transaction t2 = new Transaction(2, "rl b sl 10 wl a ua");
         t1.start();

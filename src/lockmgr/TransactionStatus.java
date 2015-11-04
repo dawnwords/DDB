@@ -8,11 +8,11 @@ import java.util.Date;
  */
 public class TransactionStatus implements Comparable<TransactionStatus> {
 
-    private static final SimpleDateFormat FORMAT = new SimpleDateFormat("%tH:%tM:%tS %L");
+    private static final SimpleDateFormat FORMAT = new SimpleDateFormat("HH:mm:ss SSS");
+    private final Thread waitingThread;
     private int tid;
     private Date lockTime;
     private LockType lockType;
-    private Thread waitingThread;
 
     public TransactionStatus(int tid, Date lockTime, LockType lockType) {
         this.tid = tid;
@@ -34,15 +34,19 @@ public class TransactionStatus implements Comparable<TransactionStatus> {
     }
 
     public void pending() throws DeadlockException {
-        try {
-            waitingThread.wait(LockManager.DEADLOCK_TIMEOUT);
-            throw new DeadlockException(tid, "Sleep timeout...deadlock.");
-        } catch (InterruptedException ignored) {
+        synchronized (waitingThread) {
+            try {
+                waitingThread.wait(LockManager.DEADLOCK_TIMEOUT);
+                throw new DeadlockException(tid, "Sleep timeout...deadlock.");
+            } catch (InterruptedException ignored) {
+            }
         }
     }
 
     public void activate() {
-        waitingThread.notify();
+        synchronized (waitingThread) {
+            waitingThread.notify();
+        }
     }
 
     @Override
