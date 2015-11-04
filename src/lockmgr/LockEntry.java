@@ -17,15 +17,10 @@ public class LockEntry {
         this.waitingQueue = new ConcurrentLinkedQueue<TransactionStatus>();
     }
 
-    public TransactionStatus currentStatus() {
-        if (waitingQueue.isEmpty()) {
-            throw new IllegalStateException("No one holds lock for " + dataKey);
-        }
-        return waitingQueue.peek();
-    }
-
     public long deadlockRemaining() {
-        return currentStatus().lockTime().getTime() + LockManager.DEADLOCK_TIMEOUT - System.currentTimeMillis();
+        TransactionStatus currentStatus = waitingQueue.peek();
+        return currentStatus == null ? 0 :
+                currentStatus.lockTime().getTime() + LockManager.DEADLOCK_TIMEOUT - System.currentTimeMillis();
     }
 
     public void addTransaction(int tid, LockType lockType) throws DeadlockException {
@@ -46,9 +41,13 @@ public class LockEntry {
         return currentStatus != status && !currentStatus.lockType().isShared(lockType);
     }
 
-    public void releaseCurrent() {
-        waitingQueue.poll();
+    public int releaseCurrent() {
+        TransactionStatus currentStatus = waitingQueue.poll();
+        if (currentStatus == null) {
+            return -1;
+        }
         passLock();
+        return currentStatus.tid();
     }
 
     private void passLock() {
@@ -70,7 +69,11 @@ public class LockEntry {
     }
 
     public boolean release(int tid) {
-        if (currentStatus().tid() == tid) {
+        TransactionStatus currentStatus = waitingQueue.peek();
+        if (currentStatus == null) {
+            return false;
+        }
+        if (currentStatus.tid() == tid) {
             releaseCurrent();
             return true;
         }
@@ -102,9 +105,6 @@ public class LockEntry {
 
     @Override
     public String toString() {
-        return "LockEntry{" +
-                "dataKey='" + dataKey + '\'' +
-                ", waitingQueue=" + waitingQueue +
-                '}';
+        return String.format("{%s:%s}", dataKey, waitingQueue);
     }
 }
