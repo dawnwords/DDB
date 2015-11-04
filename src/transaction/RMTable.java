@@ -8,6 +8,7 @@ package transaction;
 
 import lockmgr.DeadlockException;
 import lockmgr.LockManager;
+import lockmgr.LockType;
 
 import java.io.Serializable;
 import java.util.Hashtable;
@@ -55,12 +56,12 @@ public class RMTable implements Serializable {
     public void relockAll() throws DeadlockException {
         for (Object o : locks.entrySet()) {
             Map.Entry entry = (Map.Entry) o;
-            if (!lm.lock(xid, tablename + ":" + entry.getKey().toString(), (Integer) entry.getValue()))
+            if (!lm.lock(xid, tablename + ":" + entry.getKey().toString(), (LockType) entry.getValue()))
                 throw new RuntimeException();
         }
     }
 
-    public void lock(Object key, int lockType) throws DeadlockException {
+    public void lock(Object key, LockType lockType) throws DeadlockException {
         if (!lm.lock(xid, tablename + ":" + key.toString(), lockType))
             throw new RuntimeException();
         locks.put(key, lockType);

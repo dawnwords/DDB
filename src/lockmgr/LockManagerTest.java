@@ -7,8 +7,12 @@ class LockManagerTest {
     static LockManager lm = new LockManager();
 
     public static void main(String[] args) {
+        lm.start();
+
         test1();
         test2();
+
+        lm.shutdown();
     }
 
     static void test1() {
@@ -45,6 +49,7 @@ class LockManagerTest {
         StringTokenizer st;
 
         public Transaction(int xid, String ops) {
+            super("Transaction-" + xid);
             this.xid = xid;
             st = new StringTokenizer(ops);
         }

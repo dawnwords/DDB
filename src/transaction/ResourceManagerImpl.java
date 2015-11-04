@@ -2,6 +2,7 @@ package transaction;
 
 import lockmgr.DeadlockException;
 import lockmgr.LockManager;
+import lockmgr.LockType;
 
 import java.io.*;
 import java.rmi.Naming;
@@ -339,7 +340,7 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
             for (Object key : table.keySet()) {
                 ResourceItem item = table.get(key);
                 if (item != null && !item.isDeleted()) {
-                    table.lock(key, LockManager.READ);
+                    table.lock(key, LockType.READ);
                     result.add(item);
                 }
             }
@@ -373,7 +374,7 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
         RMTable table = getTable(xid, tablename);
         ResourceItem item = table.get(key);
         if (item != null && !item.isDeleted()) {
-            table.lock(key, LockManager.READ);
+            table.lock(key, LockType.READ);
             if (!storeTable(table, new File("data/" + xid + "/" + tablename))) {
                 throw new RemoteException("System Error: Can't write table to disk!");
             }
@@ -406,7 +407,7 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
             for (Object key : table.keySet()) {
                 ResourceItem item = table.get(key);
                 if (item != null && !item.isDeleted() && item.getIndex(indexName).equals(indexVal)) {
-                    table.lock(key, LockManager.READ);
+                    table.lock(key, LockType.READ);
                     result.add(item);
                 }
             }
@@ -443,7 +444,7 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
         RMTable table = getTable(xid, tablename);
         ResourceItem item = table.get(key);
         if (item != null && !item.isDeleted()) {
-            table.lock(key, LockManager.WRITE);
+            table.lock(key, LockType.WRITE);
             table.put(newItem);
             if (!storeTable(table, new File("data/" + xid + "/" + tablename))) {
                 throw new RemoteException("System Error: Can't write table to disk!");
@@ -477,7 +478,7 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
         if (item != null && !item.isDeleted()) {
             return false;
         }
-        table.lock(newItem.getKey(), LockManager.WRITE);
+        table.lock(newItem.getKey(), LockType.WRITE);
         table.put(newItem);
         if (!storeTable(table, new File("data/" + xid + "/" + tablename))) {
             throw new RemoteException("System Error: Can't write table to disk!");
@@ -507,7 +508,7 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
         RMTable table = getTable(xid, tablename);
         ResourceItem item = table.get(key);
         if (item != null && !item.isDeleted()) {
-            table.lock(key, LockManager.WRITE);
+            table.lock(key, LockType.WRITE);
             item = (ResourceItem) item.clone();
             item.delete();
             table.put(item);
@@ -544,7 +545,7 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
             for (Object key : table.keySet()) {
                 ResourceItem item = table.get(key);
                 if (item != null && !item.isDeleted() && item.getIndex(indexName).equals(indexVal)) {
-                    table.lock(item.getKey(), LockManager.WRITE);
+                    table.lock(item.getKey(), LockType.WRITE);
                     item = (ResourceItem) item.clone();
                     item.delete();
                     table.put(item);
