@@ -56,11 +56,11 @@ class LockManagerTest {
 
                     if (opcode.equalsIgnoreCase("rl")) {
                         String param = st.nextToken();
-                        lm.lock(xid, param, LockManager.READ);
+                        lm.lock(xid, param, LockType.READ);
                         System.out.println("Transaction " + xid + " got rl(" + param + ")");
                     } else if (opcode.equalsIgnoreCase("wl")) {
                         String param = st.nextToken();
-                        lm.lock(xid, param, LockManager.WRITE);
+                        lm.lock(xid, param, LockType.WRITE);
                         System.out.println("Transaction " + xid + " got wl(" + param + ")");
                     } else if (opcode.equalsIgnoreCase("ua")) {
                         lm.unlockAll(xid);
