@@ -3,8 +3,13 @@ package transaction;
 import lockmgr.DeadlockException;
 import lockmgr.LockManager;
 import lockmgr.LockType;
+import transaction.exception.InvalidIndexException;
+import transaction.exception.InvalidTransactionException;
+import transaction.exception.TransactionManagerUnaccessibleException;
+import util.IOUtil;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileInputStream;
 import java.rmi.Naming;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
@@ -21,7 +26,7 @@ import java.util.*;
 public class ResourceManagerImpl extends UnicastRemoteObject implements ResourceManager {
     protected final static String TRANSACTION_LOG_FILENAME = "transactions.log";
     protected String myRMIName = null; // Used to distinguish this RM from other
-    protected String dieTime;
+    protected DieTime dieTime;
     // RMs
     protected HashSet xids = new HashSet();
     protected TransactionManager tm = null;
@@ -32,7 +37,7 @@ public class ResourceManagerImpl extends UnicastRemoteObject implements Resource
 
     public ResourceManagerImpl(String rmiName) throws RemoteException {
         myRMIName = rmiName;
-        dieTime = "NoDie";
+        dieTime = DieTime.NO_DIE;
     }
 
     //  test usage
@@ -101,19 +106,19 @@ public class ResourceManagerImpl extends UnicastRemoteObject implements Resource
         return xids;
     }
 
-    public Collection getUpdatedRows(int xid, String tablename) {
-        RMTable table = getTable(xid, tablename);
+    public Collection getUpdatedRows(int xid, String tableName) {
+        RMTable table = getTable(xid, tableName);
         return new ArrayList(table.table.values());
     }
 
-    public Collection getUpdatedRows(String tablename) {
-        RMTable table = getTable(tablename);
+    public Collection getUpdatedRows(String tableName) {
+        RMTable table = getTable(tableName);
         return new ArrayList(table.table.values());
     }
 
-    public void setDieTime(String time) throws RemoteException {
-        dieTime = time;
-        System.out.println("Die time set to : " + time);
+    public void setDieTime(DieTime dieTime) throws RemoteException {
+        this.dieTime = dieTime;
+        System.out.println("Die time set to : " + dieTime);
     }
 
     public String getID() throws RemoteException {
@@ -124,42 +129,41 @@ public class ResourceManagerImpl extends UnicastRemoteObject implements Resource
     }
 
     public void recover() {
-        HashSet t_xids = loadTransactionLogs();
-        if (t_xids != null)
-            xids = t_xids;
+        HashSet tXids = loadTransactionLogs();
+        if (tXids != null) {
+            xids = tXids;
+        }
 
         File dataDir = new File("data");
         if (!dataDir.exists()) {
             dataDir.mkdirs();
         }
-        File[] datas = dataDir.listFiles();
-        //main table
-        for (File data : datas) {
-            if (data.isDirectory()) {
-                continue;
-            }
-            if (data.getName().equals(TRANSACTION_LOG_FILENAME)) {
-                continue;
-            }
-            getTable(data.getName());
-        }
+        File[] dataFiles = dataDir.listFiles();
 
-        //xtable
-        for (File data : datas) {
-            if (!data.isDirectory())
-                continue;
-            File[] xdatas = data.listFiles();
-            int xid = Integer.parseInt(data.getName());
-            if (!xids.contains(xid)) {
-                //this should never happen;
-                throw new RuntimeException("ERROR: UNEXPECTED XID");
-            }
-            for (File xdata : xdatas) {
-                RMTable xtable = getTable(xid, xdata.getName());
-                try {
-                    xtable.relockAll();
-                } catch (DeadlockException e) {
-                    throw new RuntimeException(e);
+        if (dataFiles != null) {
+            for (File dataFile : dataFiles) {
+                if (dataFile.isDirectory()) {
+                    //main table
+                    if (dataFile.getName().equals(TRANSACTION_LOG_FILENAME)) {
+                        getTable(dataFile.getName());
+                    }
+                } else {
+                    //xTable
+                    int xid = Integer.parseInt(dataFile.getName());
+                    if (!xids.contains(xid)) {
+                        throw new IllegalStateException("RM Recover Error: unexpected xid " + xid);
+                    }
+                    File[] xDataFiles = dataFile.listFiles();
+                    if (xDataFiles != null) {
+                        for (File xData : xDataFiles) {
+                            RMTable xTable = getTable(xid, xData.getName());
+                            try {
+                                xTable.relockAll();
+                            } catch (DeadlockException e) {
+                                throw new RuntimeException(e);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -187,9 +191,9 @@ public class ResourceManagerImpl extends UnicastRemoteObject implements Resource
                 int xid = (Integer) xid1;
                 System.out.println(myRMIName + " Re-enlist to TM with xid" + xid);
                 tm.enlist(xid, this);
-                if (dieTime.equals("AfterEnlist"))
+                if (dieTime == DieTime.AFTER_ENLIST) {
                     dieNow();
-                //                iter.remove();
+                }
             }
             System.out.println(myRMIName + " bound to TM");
         } catch (Exception e) {
@@ -233,115 +237,62 @@ public class ResourceManagerImpl extends UnicastRemoteObject implements Resource
         return lm;
     }
 
-    protected RMTable loadTable(File file) {
-        ObjectInputStream oin = null;
-        try {
-            oin = new ObjectInputStream(new FileInputStream(file));
-            return (RMTable) oin.readObject();
-        } catch (Exception e) {
-            return null;
-        } finally {
-            try {
-                if (oin != null)
-                    oin.close();
-            } catch (IOException ignored) {
-            }
-        }
+    protected RMTable loadTable(int xid, String tableName) {
+        return IOUtil.readObject("data" + File.separator + (xid == -1 ? "" : xid + File.separator) + tableName);
     }
 
-    protected boolean storeTable(RMTable table, File file) {
-        file.getParentFile().mkdirs();
-        return output(file, table);
+    protected boolean storeTable(int xid, String tableName, RMTable table) {
+        return IOUtil.writeObject("data" + File.separator + xid, tableName, table);
     }
 
-    protected RMTable getTable(int xid, String tablename) {
-        Hashtable xidtables;
+    protected RMTable getTable(int xid, String tableName) {
+        Hashtable xidTables;
         synchronized (tables) {
-            xidtables = (Hashtable) tables.get(xid);
-            if (xidtables == null) {
-                xidtables = new Hashtable();
-                tables.put(xid, xidtables);
+            xidTables = (Hashtable) tables.get(xid);
+            if (xidTables == null) {
+                xidTables = new Hashtable();
+                tables.put(xid, xidTables);
             }
         }
-        synchronized (xidtables) {
-            RMTable table = (RMTable) xidtables.get(tablename);
+        synchronized (xidTables) {
+            RMTable table = (RMTable) xidTables.get(tableName);
             if (table != null)
                 return table;
-            table = loadTable(new File("data/" + (xid == -1 ? "" : "" + xid + "/") + tablename));
+            table = loadTable(xid, tableName);
             if (table == null) {
                 if (xid == -1)
-                    table = new RMTable(tablename, null, -1, lm);
+                    table = new RMTable(tableName, null, -1, lm);
                 else {
-                    table = new RMTable(tablename, getTable(tablename), xid, lm);
+                    table = new RMTable(tableName, getTable(tableName), xid, lm);
                 }
             } else {
                 if (xid != -1) {
                     table.setLockManager(lm);
-                    table.setParent(getTable(tablename));
+                    table.setParent(getTable(tableName));
                 }
             }
-            xidtables.put(tablename, table);
+            xidTables.put(tableName, table);
             return table;
         }
     }
 
-    protected RMTable getTable(String tablename) {
-        return getTable(-1, tablename);
+    protected RMTable getTable(String tableName) {
+        return getTable(-1, tableName);
     }
 
     protected HashSet loadTransactionLogs() {
-        File xidLog = new File("data/transactions.log");
-        ObjectInputStream oin = null;
-        try {
-            oin = new ObjectInputStream(new FileInputStream(xidLog));
-            return (HashSet) oin.readObject();
-        } catch (Exception e) {
-            return null;
-        } finally {
-            try {
-                if (oin != null)
-                    oin.close();
-            } catch (IOException ignored) {
-            }
-        }
+        return IOUtil.readObject("data" + File.separator + "transactions.log");
     }
 
     protected boolean storeTransactionLogs(HashSet xids) {
-        File xidLog = new File("data/transactions.log");
-        xidLog.getParentFile().mkdirs();
-        xidLog.getParentFile().mkdirs();
-        return output(xidLog, xids);
+        return IOUtil.writeObject("data", "transactions.log", xids);
     }
 
-    private boolean output(File file, Object data) {
-        ObjectOutputStream oout = null;
-        try {
-            oout = new ObjectOutputStream(new FileOutputStream(file));
-            oout.writeObject(data);
-            oout.flush();
-            return true;
-        } catch (Exception e) {
-            return false;
-        } finally {
-            try {
-                if (oout != null)
-                    oout.close();
-            } catch (IOException ignored) {
-            }
-        }
-    }
-
-    public Collection query(int xid, String tablename) throws DeadlockException, InvalidTransactionException, RemoteException {
-        if (xid < 0) {
-            throw new InvalidTransactionException(xid, "Xid must be positive.");
-        }
+    public Collection query(int xid, String tableName) throws DeadlockException, InvalidTransactionException, RemoteException {
         addXid(xid);
 
-        if (dieTime.equals("AfterEnlist"))
-            dieNow();
-
         Collection result = new ArrayList();
-        RMTable table = getTable(xid, tablename);
+        RMTable table = getTable(xid, tableName);
         synchronized (table) {
             for (Object key : table.keySet()) {
                 ResourceItem item = table.get(key);
@@ -351,7 +302,7 @@ public class ResourceManagerImpl extends UnicastRemoteObject implements Resource
                 }
             }
             if (!result.isEmpty()) {
-                if (!storeTable(table, new File("data/" + xid + "/" + tablename))) {
+                if (!storeTable(xid, tableName, table)) {
                     throw new RemoteException("System Error: Can't write table to disk!");
                 }
             }
@@ -359,20 +310,14 @@ public class ResourceManagerImpl extends UnicastRemoteObject implements Resource
         return result;
     }
 
-    public ResourceItem query(int xid, String tablename, Object key) throws DeadlockException, InvalidTransactionException, RemoteException {
-        if (xid < 0) {
-            throw new InvalidTransactionException(xid, "Xid must be positive.");
-        }
+    public ResourceItem query(int xid, String tableName, Object key) throws DeadlockException, InvalidTransactionException, RemoteException {
         addXid(xid);
 
-        if (dieTime.equals("AfterEnlist"))
-            dieNow();
-
-        RMTable table = getTable(xid, tablename);
+        RMTable table = getTable(xid, tableName);
         ResourceItem item = table.get(key);
         if (item != null && !item.isDeleted()) {
             table.lock(key, LockType.READ);
-            if (!storeTable(table, new File("data/" + xid + "/" + tablename))) {
+            if (!storeTable(xid, tableName, table)) {
                 throw new RemoteException("System Error: Can't write table to disk!");
             }
             return item;
@@ -380,17 +325,11 @@ public class ResourceManagerImpl extends UnicastRemoteObject implements Resource
         return null;
     }
 
-    public Collection query(int xid, String tablename, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, InvalidIndexException, RemoteException {
-        if (xid < 0) {
-            throw new InvalidTransactionException(xid, "Xid must be positive.");
-        }
+    public Collection query(int xid, String tableName, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, InvalidIndexException, RemoteException {
         addXid(xid);
 
-        if (dieTime.equals("AfterEnlist"))
-            dieNow();
-
         Collection result = new ArrayList();
-        RMTable table = getTable(xid, tablename);
+        RMTable table = getTable(xid, tableName);
         synchronized (table) {
             for (Object key : table.keySet()) {
                 ResourceItem item = table.get(key);
@@ -400,7 +339,7 @@ public class ResourceManagerImpl extends UnicastRemoteObject implements Resource
                 }
             }
             if (!result.isEmpty()) {
-                if (!storeTable(table, new File("data/" + xid + "/" + tablename))) {
+                if (!storeTable(xid, tableName, table)) {
                     throw new RemoteException("System Error: Can't write table to disk!");
                 }
             }
@@ -408,24 +347,18 @@ public class ResourceManagerImpl extends UnicastRemoteObject implements Resource
         return result;
     }
 
-    public boolean update(int xid, String tablename, Object key, ResourceItem newItem) throws DeadlockException, InvalidTransactionException, RemoteException {
-        if (xid < 0) {
-            throw new InvalidTransactionException(xid, "Xid must be positive.");
-        }
+    public boolean update(int xid, String tableName, Object key, ResourceItem newItem) throws DeadlockException, InvalidTransactionException, RemoteException {
         if (!key.equals(newItem.getKey()))
             throw new IllegalArgumentException();
 
         addXid(xid);
 
-        if (dieTime.equals("AfterEnlist"))
-            dieNow();
-
-        RMTable table = getTable(xid, tablename);
+        RMTable table = getTable(xid, tableName);
         ResourceItem item = table.get(key);
         if (item != null && !item.isDeleted()) {
             table.lock(key, LockType.WRITE);
             table.put(newItem);
-            if (!storeTable(table, new File("data/" + xid + "/" + tablename))) {
+            if (!storeTable(xid, tableName, table)) {
                 throw new RemoteException("System Error: Can't write table to disk!");
             }
             return true;
@@ -433,48 +366,33 @@ public class ResourceManagerImpl extends UnicastRemoteObject implements Resource
         return false;
     }
 
-    public boolean insert(int xid, String tablename, ResourceItem newItem) throws DeadlockException, InvalidTransactionException, RemoteException {
-        if (xid < 0) {
-            throw new InvalidTransactionException(xid, "Xid must be positive.");
-        }
-
+    public boolean insert(int xid, String tableName, ResourceItem newItem) throws DeadlockException, InvalidTransactionException, RemoteException {
         addXid(xid);
 
-        if (dieTime.equals("AfterEnlist"))
-            dieNow();
-
-        RMTable table = getTable(xid, tablename);
+        RMTable table = getTable(xid, tableName);
         ResourceItem item = table.get(newItem.getKey());
         if (item != null && !item.isDeleted()) {
             return false;
         }
         table.lock(newItem.getKey(), LockType.WRITE);
         table.put(newItem);
-        if (!storeTable(table, new File("data/" + xid + "/" + tablename))) {
+        if (!storeTable(xid, tableName, table)) {
             throw new RemoteException("System Error: Can't write table to disk!");
         }
         return true;
     }
 
-    public boolean delete(int xid, String tablename, Object key) throws DeadlockException, InvalidTransactionException,
-            RemoteException {
-        if (xid < 0) {
-            throw new InvalidTransactionException(xid, "Xid must be positive.");
-        }
-
+    public boolean delete(int xid, String tableName, Object key) throws DeadlockException, InvalidTransactionException, RemoteException {
         addXid(xid);
 
-        if (dieTime.equals("AfterEnlist"))
-            dieNow();
-
-        RMTable table = getTable(xid, tablename);
+        RMTable table = getTable(xid, tableName);
         ResourceItem item = table.get(key);
         if (item != null && !item.isDeleted()) {
             table.lock(key, LockType.WRITE);
             item = (ResourceItem) item.clone();
             item.delete();
             table.put(item);
-            if (!storeTable(table, new File("data/" + xid + "/" + tablename))) {
+            if (!storeTable(xid, tableName, table)) {
                 throw new RemoteException("System Error: Can't write table to disk!");
             }
             return true;
@@ -482,19 +400,14 @@ public class ResourceManagerImpl extends UnicastRemoteObject implements Resource
         return false;
     }
 
-    public int delete(int xid, String tablename, String indexName, Object indexVal) throws DeadlockException,
-            InvalidTransactionException, InvalidIndexException, RemoteException {
+    public int delete(int xid, String tableName, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, InvalidIndexException, RemoteException {
         if (xid < 0) {
             throw new InvalidTransactionException(xid, "Xid must be positive.");
         }
         addXid(xid);
 
-        if (dieTime.equals("AfterEnlist"))
-            dieNow();
-
         int n = 0;
-
-        RMTable table = getTable(xid, tablename);
+        RMTable table = getTable(xid, tableName);
         synchronized (table) {
             for (Object key : table.keySet()) {
                 ResourceItem item = table.get(key);
@@ -507,7 +420,7 @@ public class ResourceManagerImpl extends UnicastRemoteObject implements Resource
                 }
             }
             if (n > 0) {
-                if (!storeTable(table, new File("data/" + xid + "/" + tablename))) {
+                if (!storeTable(xid, tableName, table)) {
                     throw new RemoteException("System Error: Can't write table to disk!");
                 }
             }
@@ -515,7 +428,11 @@ public class ResourceManagerImpl extends UnicastRemoteObject implements Resource
         return n;
     }
 
-    private void addXid(int xid) throws RemoteException {
+    private void addXid(int xid) throws RemoteException, InvalidTransactionException {
+        if (xid < 0) {
+            throw new InvalidTransactionException(xid, "Xid must be positive.");
+        }
+
         try {
             synchronized (xids) {
                 xids.add(xid);
@@ -525,41 +442,46 @@ public class ResourceManagerImpl extends UnicastRemoteObject implements Resource
         } catch (TransactionManagerUnaccessibleException e) {
             throw new RemoteException(e.getLocalizedMessage(), e);
         }
+
+        if (dieTime == DieTime.AFTER_ENLIST) {
+            dieNow();
+        }
     }
 
     public boolean prepare(int xid) throws InvalidTransactionException, RemoteException {
-        if (dieTime.equals("BeforePrepare"))
+        if (dieTime == DieTime.BEFORE_PREPARE)
             dieNow();
         if (xid < 0) {
             throw new InvalidTransactionException(xid, "Xid must be positive.");
         }
-        if (dieTime.equals("AfterPrepare"))
+        if (dieTime == DieTime.AFTER_PREPARE)
             dieNow();
         return true;
     }
 
     public void commit(int xid) throws InvalidTransactionException, RemoteException {
-        if (dieTime.equals("BeforeCommit"))
+        if (dieTime == DieTime.BEFORE_COMMIT)
             dieNow();
         if (xid < 0) {
             throw new InvalidTransactionException(xid, "Xid must be positive.");
         }
-        Hashtable xidtables = (Hashtable) tables.get(xid);
-        if (xidtables != null) {
-            synchronized (xidtables) {
-                for (Object o : xidtables.entrySet()) {
+        Hashtable xidTables = (Hashtable) tables.get(xid);
+        if (xidTables != null) {
+            synchronized (xidTables) {
+                for (Object o : xidTables.entrySet()) {
                     Map.Entry entry = (Map.Entry) o;
-                    RMTable xtable = (RMTable) entry.getValue();
-                    RMTable table = getTable(xtable.getTablename());
-                    for (Object key : xtable.keySet()) {
-                        ResourceItem item = xtable.get(key);
+                    RMTable xTable = (RMTable) entry.getValue();
+                    RMTable table = getTable(xTable.getTablename());
+                    for (Object key : xTable.keySet()) {
+                        ResourceItem item = xTable.get(key);
                         if (item.isDeleted())
                             table.remove(item);
                         else
                             table.put(item);
                     }
-                    if (!storeTable(table, new File("data/" + entry.getKey())))
+                    if (!IOUtil.writeObject("data", entry.getKey().toString(), table)) {
                         throw new RemoteException("Can't write table to disk");
+                    }
                     new File("data/" + xid + "/" + entry.getKey()).delete();
                 }
                 new File("data/" + xid).delete();
@@ -576,15 +498,15 @@ public class ResourceManagerImpl extends UnicastRemoteObject implements Resource
     }
 
     public void abort(int xid) throws InvalidTransactionException, RemoteException {
-        if (dieTime.equals("BeforeAbort"))
+        if (dieTime == DieTime.BEFORE_ABORT)
             dieNow();
         if (xid < 0) {
             throw new InvalidTransactionException(xid, "Xid must be positive.");
         }
-        Hashtable xidtables = (Hashtable) tables.get(xid);
-        if (xidtables != null) {
-            synchronized (xidtables) {
-                for (Object o : xidtables.entrySet()) {
+        Hashtable xidTables = (Hashtable) tables.get(xid);
+        if (xidTables != null) {
+            synchronized (xidTables) {
+                for (Object o : xidTables.entrySet()) {
                     Map.Entry entry = (Map.Entry) o;
                     new File("data/" + xid + "/" + entry.getKey()).delete();
                 }

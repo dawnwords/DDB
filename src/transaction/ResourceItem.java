@@ -6,6 +6,8 @@
  */
 package transaction;
 
+import transaction.exception.InvalidIndexException;
+
 import java.io.Serializable;
 
 /**

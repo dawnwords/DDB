@@ -6,6 +6,8 @@
  */
 package transaction;
 
+import transaction.exception.InvalidIndexException;
+
 import java.io.Serializable;
 
 /**
@@ -29,7 +31,7 @@ public class Reservation implements ResourceItem, Serializable {
 
     protected String resvKey;
 
-    protected boolean isdeleted = false;
+    protected boolean isDeleted = false;
 
     public Reservation(String custName, int resvType, String resvKey) {
         this.custName = custName;
@@ -78,17 +80,16 @@ public class Reservation implements ResourceItem, Serializable {
     }
 
     public boolean isDeleted() {
-        return isdeleted;
+        return isDeleted;
     }
 
     public void delete() {
-        isdeleted = true;
+        isDeleted = true;
     }
 
     public Object clone() {
-        Reservation o = new Reservation(getCustName(), getResvType(),
-                getResvKey());
-        o.isdeleted = isdeleted;
+        Reservation o = new Reservation(custName, resvType, resvKey);
+        o.isDeleted = isDeleted;
         return o;
     }
 }

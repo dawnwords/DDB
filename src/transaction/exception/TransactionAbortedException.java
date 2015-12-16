@@ -1,4 +1,4 @@
-package transaction;
+package transaction.exception;
 
 /**
  * A problem occurred that caused the transaction to abort.  Perhaps
