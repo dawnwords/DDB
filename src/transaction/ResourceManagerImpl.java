@@ -7,6 +7,9 @@ import lockmgr.LockType;
 import java.io.*;
 import java.rmi.Naming;
 import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+import java.rmi.server.UnicastRemoteObject;
 import java.util.*;
 
 /**
@@ -15,7 +18,7 @@ import java.util.*;
  * Description: toy implementation of the RM
  */
 
-public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject implements ResourceManager {
+public class ResourceManagerImpl extends UnicastRemoteObject implements ResourceManager {
     protected final static String TRANSACTION_LOG_FILENAME = "transactions.log";
     protected String myRMIName = null; // Used to distinguish this RM from other
     protected String dieTime;
@@ -25,25 +28,27 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
     protected LockManager lm = new LockManager();
     protected Hashtable tables = new Hashtable();
 
+    private volatile boolean stop;
+
     public ResourceManagerImpl(String rmiName) throws RemoteException {
         myRMIName = rmiName;
         dieTime = "NoDie";
+    }
 
+    //  test usage
+    public ResourceManagerImpl() throws RemoteException {
+    }
+
+    public void start() {
         recover();
-
-        while (!reconnect()) {
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException ignored) {
-            }
-        }
 
         new Thread() {
             public void run() {
-                while (true) {
+                while (!stop) {
                     try {
-                        if (tm != null)
+                        if (tm != null) {
                             tm.ping();
+                        }
                     } catch (Exception e) {
                         tm = null;
                     }
@@ -51,20 +56,45 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
                     if (tm == null) {
                         reconnect();
                         System.out.println("reconnect tm!");
-
                     }
-                    try {
-                        Thread.sleep(500);
-                    } catch (InterruptedException ignored) {
-                    }
-
+                    sleepForAWhile();
                 }
             }
         }.start();
+
+
+        Properties prop = new Properties();
+        try {
+            prop.load(new FileInputStream("conf/ddb.conf"));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        String rmiPort = prop.getProperty("rm." + myRMIName + ".port");
+        Registry _rmiRegistry;
+        try {
+            _rmiRegistry = LocateRegistry.createRegistry(Integer.parseInt(rmiPort));
+        } catch (RemoteException e) {
+            throw new RuntimeException(e);
+        }
+
+        if (myRMIName.equals("")) {
+            throw new IllegalStateException("No RMI name given");
+        }
+
+        try {
+            _rmiRegistry.bind(myRMIName, this);
+            System.out.println(myRMIName + " bound");
+        } catch (Exception e) {
+            throw new RuntimeException(myRMIName + " not bound:" + e);
+        }
     }
 
-    //  test usage
-    public ResourceManagerImpl() throws RemoteException {
+    private void sleepForAWhile() {
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException ignored) {
+        }
     }
 
     public Set getTransactions() {
@@ -120,7 +150,7 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
                 continue;
             File[] xdatas = data.listFiles();
             int xid = Integer.parseInt(data.getName());
-            if (!xids.contains(new Integer(xid))) {
+            if (!xids.contains(xid)) {
                 //this should never happen;
                 throw new RuntimeException("ERROR: UNEXPECTED XID");
             }
@@ -171,14 +201,10 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
     }
 
     public boolean dieNow() throws RemoteException {
-        try {
-            Thread.sleep(500);
-        } catch (InterruptedException e) {
-            //e.printStackTrace();
-        }
+        stop = true;
+        sleepForAWhile();
         System.exit(1);
-        return true; // We won't ever get here since we exited above;
-        // but we still need it to please the compiler.
+        return true;
     }
 
     public TransactionManager getTransactionManager() throws TransactionManagerUnaccessibleException {
@@ -225,27 +251,13 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
 
     protected boolean storeTable(RMTable table, File file) {
         file.getParentFile().mkdirs();
-        ObjectOutputStream oout = null;
-        try {
-            oout = new ObjectOutputStream(new FileOutputStream(file));
-            oout.writeObject(table);
-            oout.flush();
-            return true;
-        } catch (Exception e) {
-            return false;
-        } finally {
-            try {
-                if (oout != null)
-                    oout.close();
-            } catch (IOException ignored) {
-            }
-        }
+        return output(file, table);
     }
 
     protected RMTable getTable(int xid, String tablename) {
-        Hashtable xidtables = null;
+        Hashtable xidtables;
         synchronized (tables) {
-            xidtables = (Hashtable) tables.get(new Integer(xid));
+            xidtables = (Hashtable) tables.get(xid);
             if (xidtables == null) {
                 xidtables = new Hashtable();
                 tables.put(xid, xidtables);
@@ -298,10 +310,14 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
         File xidLog = new File("data/transactions.log");
         xidLog.getParentFile().mkdirs();
         xidLog.getParentFile().mkdirs();
+        return output(xidLog, xids);
+    }
+
+    private boolean output(File file, Object data) {
         ObjectOutputStream oout = null;
         try {
-            oout = new ObjectOutputStream(new FileOutputStream(xidLog));
-            oout.writeObject(xids);
+            oout = new ObjectOutputStream(new FileOutputStream(file));
+            oout.writeObject(data);
             oout.flush();
             return true;
         } catch (Exception e) {
@@ -315,21 +331,11 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
         }
     }
 
-    public Collection query(int xid, String tablename) throws DeadlockException, InvalidTransactionException,
-            RemoteException {
+    public Collection query(int xid, String tablename) throws DeadlockException, InvalidTransactionException, RemoteException {
         if (xid < 0) {
             throw new InvalidTransactionException(xid, "Xid must be positive.");
         }
-        try {
-            synchronized (xids) {
-                xids.add(xid);
-                storeTransactionLogs(xids);
-            }
-
-            getTransactionManager().enlist(xid, this);
-        } catch (TransactionManagerUnaccessibleException e) {
-            throw new RemoteException(e.getLocalizedMessage(), e);
-        }
+        addXid(xid);
 
         if (dieTime.equals("AfterEnlist"))
             dieNow();
@@ -353,20 +359,11 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
         return result;
     }
 
-    public ResourceItem query(int xid, String tablename, Object key) throws DeadlockException,
-            InvalidTransactionException, RemoteException {
+    public ResourceItem query(int xid, String tablename, Object key) throws DeadlockException, InvalidTransactionException, RemoteException {
         if (xid < 0) {
             throw new InvalidTransactionException(xid, "Xid must be positive.");
         }
-        try {
-            synchronized (xids) {
-                xids.add(xid);
-                storeTransactionLogs(xids);
-            }
-            getTransactionManager().enlist(xid, this);
-        } catch (TransactionManagerUnaccessibleException e) {
-            throw new RemoteException(e.getLocalizedMessage(), e);
-        }
+        addXid(xid);
 
         if (dieTime.equals("AfterEnlist"))
             dieNow();
@@ -383,20 +380,11 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
         return null;
     }
 
-    public Collection query(int xid, String tablename, String indexName, Object indexVal) throws DeadlockException,
-            InvalidTransactionException, InvalidIndexException, RemoteException {
+    public Collection query(int xid, String tablename, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, InvalidIndexException, RemoteException {
         if (xid < 0) {
             throw new InvalidTransactionException(xid, "Xid must be positive.");
         }
-        try {
-            synchronized (xids) {
-                xids.add(xid);
-                storeTransactionLogs(xids);
-            }
-            getTransactionManager().enlist(xid, this);
-        } catch (TransactionManagerUnaccessibleException e) {
-            throw new RemoteException(e.getLocalizedMessage(), e);
-        }
+        addXid(xid);
 
         if (dieTime.equals("AfterEnlist"))
             dieNow();
@@ -420,23 +408,14 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
         return result;
     }
 
-    public boolean update(int xid, String tablename, Object key, ResourceItem newItem) throws DeadlockException,
-            InvalidTransactionException, RemoteException {
+    public boolean update(int xid, String tablename, Object key, ResourceItem newItem) throws DeadlockException, InvalidTransactionException, RemoteException {
         if (xid < 0) {
             throw new InvalidTransactionException(xid, "Xid must be positive.");
         }
         if (!key.equals(newItem.getKey()))
             throw new IllegalArgumentException();
 
-        try {
-            synchronized (xids) {
-                xids.add(xid);
-                storeTransactionLogs(xids);
-            }
-            getTransactionManager().enlist(xid, this);
-        } catch (TransactionManagerUnaccessibleException e) {
-            throw new RemoteException(e.getLocalizedMessage(), e);
-        }
+        addXid(xid);
 
         if (dieTime.equals("AfterEnlist"))
             dieNow();
@@ -454,27 +433,18 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
         return false;
     }
 
-    public boolean insert(int xid, String tablename, ResourceItem newItem) throws DeadlockException,
-            InvalidTransactionException, RemoteException {
+    public boolean insert(int xid, String tablename, ResourceItem newItem) throws DeadlockException, InvalidTransactionException, RemoteException {
         if (xid < 0) {
             throw new InvalidTransactionException(xid, "Xid must be positive.");
         }
 
-        try {
-            synchronized (xids) {
-                xids.add(xid);
-                storeTransactionLogs(xids);
-            }
-            getTransactionManager().enlist(xid, this);
-        } catch (TransactionManagerUnaccessibleException e) {
-            throw new RemoteException(e.getLocalizedMessage(), e);
-        }
+        addXid(xid);
 
         if (dieTime.equals("AfterEnlist"))
             dieNow();
 
         RMTable table = getTable(xid, tablename);
-        ResourceItem item = (ResourceItem) table.get(newItem.getKey());
+        ResourceItem item = table.get(newItem.getKey());
         if (item != null && !item.isDeleted()) {
             return false;
         }
@@ -492,15 +462,7 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
             throw new InvalidTransactionException(xid, "Xid must be positive.");
         }
 
-        try {
-            synchronized (xids) {
-                xids.add(xid);
-                storeTransactionLogs(xids);
-            }
-            getTransactionManager().enlist(xid, this);
-        } catch (TransactionManagerUnaccessibleException e) {
-            throw new RemoteException(e.getLocalizedMessage(), e);
-        }
+        addXid(xid);
 
         if (dieTime.equals("AfterEnlist"))
             dieNow();
@@ -525,15 +487,7 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
         if (xid < 0) {
             throw new InvalidTransactionException(xid, "Xid must be positive.");
         }
-        try {
-            synchronized (xids) {
-                xids.add(xid);
-                storeTransactionLogs(xids);
-            }
-            getTransactionManager().enlist(xid, this);
-        } catch (TransactionManagerUnaccessibleException e) {
-            throw new RemoteException(e.getLocalizedMessage(), e);
-        }
+        addXid(xid);
 
         if (dieTime.equals("AfterEnlist"))
             dieNow();
@@ -561,6 +515,18 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
         return n;
     }
 
+    private void addXid(int xid) throws RemoteException {
+        try {
+            synchronized (xids) {
+                xids.add(xid);
+                storeTransactionLogs(xids);
+            }
+            getTransactionManager().enlist(xid, this);
+        } catch (TransactionManagerUnaccessibleException e) {
+            throw new RemoteException(e.getLocalizedMessage(), e);
+        }
+    }
+
     public boolean prepare(int xid) throws InvalidTransactionException, RemoteException {
         if (dieTime.equals("BeforePrepare"))
             dieNow();
@@ -578,7 +544,7 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
         if (xid < 0) {
             throw new InvalidTransactionException(xid, "Xid must be positive.");
         }
-        Hashtable xidtables = (Hashtable) tables.get(new Integer(xid));
+        Hashtable xidtables = (Hashtable) tables.get(xid);
         if (xidtables != null) {
             synchronized (xidtables) {
                 for (Object o : xidtables.entrySet()) {
@@ -597,7 +563,7 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
                     new File("data/" + xid + "/" + entry.getKey()).delete();
                 }
                 new File("data/" + xid).delete();
-                tables.remove(new Integer(xid));
+                tables.remove(xid);
             }
         }
 
@@ -605,7 +571,7 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
             throw new RuntimeException();
 
         synchronized (xids) {
-            xids.remove(new Integer(xid));
+            xids.remove(xid);
         }
     }
 
@@ -615,7 +581,7 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
         if (xid < 0) {
             throw new InvalidTransactionException(xid, "Xid must be positive.");
         }
-        Hashtable xidtables = (Hashtable) tables.get(new Integer(xid));
+        Hashtable xidtables = (Hashtable) tables.get(xid);
         if (xidtables != null) {
             synchronized (xidtables) {
                 for (Object o : xidtables.entrySet()) {
@@ -623,7 +589,7 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
                     new File("data/" + xid + "/" + entry.getKey()).delete();
                 }
                 new File("data/" + xid).delete();
-                tables.remove(new Integer(xid));
+                tables.remove(xid);
             }
         }
 
@@ -631,7 +597,7 @@ public class ResourceManagerImpl extends java.rmi.server.UnicastRemoteObject imp
             throw new RuntimeException();
 
         synchronized (xids) {
-            xids.remove(new Integer(xid));
+            xids.remove(xid);
         }
     }
 }
