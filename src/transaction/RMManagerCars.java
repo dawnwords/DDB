@@ -11,7 +11,7 @@ import java.rmi.RemoteException;
 public class RMManagerCars {
     public static void main(String[] args) {
         try {
-            new ResourceManagerImpl(ResourceManager.RMINameCars).start();
+            new ResourceManagerImpl<String>(ResourceManager.RMINameCars).start();
         } catch (RemoteException e) {
             e.printStackTrace();
         }

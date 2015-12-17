@@ -4,7 +4,7 @@
  * TODO To change the template for this generated file go to
  * Window - Preferences - Java - Code Style - Code Templates
  */
-package transaction;
+package transaction.bean;
 
 import java.io.Serializable;
 
@@ -17,11 +17,11 @@ import java.io.Serializable;
 public class ReservationKey implements Serializable {
     protected String custName;
 
-    protected int resvType;
+    protected ReservationType resvType;
 
     protected String resvKey;
 
-    public ReservationKey(String custName, int resvType, String resvKey) {
+    public ReservationKey(String custName, ReservationType resvType, String resvKey) {
         this.custName = custName;
         this.resvKey = resvKey;
         this.resvType = resvType;
@@ -33,27 +33,18 @@ public class ReservationKey implements Serializable {
         if (this == o)
             return true;
         ReservationKey k = (ReservationKey) o;
-        if (k.custName.equals(custName) && k.resvKey.equals(resvKey) && k.resvType == resvType)
-            return true;
-        return false;
+        return k.custName.equals(custName) && k.resvKey.equals(resvKey) && k.resvType == resvType;
     }
 
+    @Override
     public int hashCode() {
-        return custName.hashCode() + resvType + resvKey.hashCode();
+        int result = custName != null ? custName.hashCode() : 0;
+        result = 31 * result + (resvType != null ? resvType.hashCode() : 0);
+        result = 31 * result + (resvKey != null ? resvKey.hashCode() : 0);
+        return result;
     }
 
     public String toString() {
-        StringBuffer buf = new StringBuffer("[");
-        buf.append("customer name=");
-        buf.append(custName);
-        buf.append(";");
-        buf.append("resvKey=");
-        buf.append(resvKey);
-        buf.append(";");
-        buf.append("resvType=");
-        buf.append(resvType);
-        buf.append("]");
-
-        return buf.toString();
+        return "[customer name=" + custName + ";" + "resvKey=" + resvKey + ";" + "resvType=" + resvType + "]";
     }
 }
