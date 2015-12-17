@@ -9,34 +9,30 @@ package transaction;
 import lockmgr.DeadlockException;
 import lockmgr.LockManager;
 import lockmgr.LockType;
+import transaction.bean.ResourceItem;
 
 import java.io.Serializable;
+import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * @author RAdmin
- *         <p/>
- *         TODO To change the template for this generated type comment go to Window -
- *         Preferences - Java - Code Style - Code Templates
- */
-public class RMTable implements Serializable {
-    protected Hashtable table = new Hashtable();
+public class RMTable<K> implements Serializable {
+    protected Hashtable<K, ResourceItem<K>> table = new Hashtable<K, ResourceItem<K>>();
 
-    transient protected RMTable parent;
+    transient protected RMTable<K> parent;
 
-    protected Hashtable locks = new Hashtable();
+    protected Hashtable<K, LockType> locks = new Hashtable<K, LockType>();
 
     transient protected LockManager lm;
 
-    protected String tablename;
+    protected String tableName;
 
     protected int xid;
 
-    public RMTable(String tablename, RMTable parent, int xid, LockManager lm) {
+    public RMTable(String tableName, RMTable<K> parent, int xid, LockManager lm) {
         this.xid = xid;
-        this.tablename = tablename;
+        this.tableName = tableName;
         this.parent = parent;
         this.lm = lm;
     }
@@ -45,49 +41,49 @@ public class RMTable implements Serializable {
         this.lm = lm;
     }
 
-    public void setParent(RMTable parent) {
+    public void setParent(RMTable<K> parent) {
         this.parent = parent;
     }
 
-    public String getTablename() {
-        return tablename;
+    public String getTableName() {
+        return tableName;
     }
 
     public void relockAll() throws DeadlockException {
         for (Object o : locks.entrySet()) {
             Map.Entry entry = (Map.Entry) o;
-            if (!lm.lock(xid, tablename + ":" + entry.getKey().toString(), (LockType) entry.getValue()))
+            if (!lm.lock(xid, tableName + ":" + entry.getKey().toString(), (LockType) entry.getValue()))
                 throw new RuntimeException();
         }
     }
 
-    public void lock(Object key, LockType lockType) throws DeadlockException {
-        if (!lm.lock(xid, tablename + ":" + key.toString(), lockType))
+    public void lock(K key, LockType lockType) throws DeadlockException {
+        if (!lm.lock(xid, tableName + ":" + key.toString(), lockType))
             throw new RuntimeException();
         locks.put(key, lockType);
     }
 
-    public ResourceItem get(Object key) {
-        ResourceItem item = (ResourceItem) table.get(key);
-        if (item == null && parent != null)
+    public ResourceItem<K> get(K key) {
+        ResourceItem<K> item = table.get(key);
+        if (item == null && parent != null) {
             item = parent.get(key);
+        }
         return item;
     }
 
-    public void put(ResourceItem item) {
+    public void put(ResourceItem<K> item) {
         table.put(item.getKey(), item);
     }
 
-    public void remove(ResourceItem item) {
+    public void remove(ResourceItem<K> item) {
         table.remove(item.getKey());
     }
 
-    public Set keySet() {
-        Hashtable t = new Hashtable();
+    public Set<K> keySet() {
+        HashSet<K> result = new HashSet<K>(table.keySet());
         if (parent != null) {
-            t.putAll(parent.table);
+            result.addAll(parent.table.keySet());
         }
-        t.putAll(table);
-        return t.keySet();
+        return result;
     }
 }

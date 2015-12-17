@@ -6,12 +6,14 @@
  */
 package transaction;
 
+import transaction.bean.ReservationKey;
+
 import java.rmi.RemoteException;
 
 public class RMManagerCustomers {
     public static void main(String[] args) {
         try {
-            new ResourceManagerImpl(ResourceManager.RMINameCustomers).start();
+            new ResourceManagerImpl<ReservationKey>(ResourceManager.RMINameReservations).start();
         } catch (RemoteException e) {
             e.printStackTrace();
         }

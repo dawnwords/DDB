@@ -1,12 +1,13 @@
 package transaction;
 
 import lockmgr.DeadlockException;
+import transaction.bean.ResourceItem;
 import transaction.exception.InvalidIndexException;
 import transaction.exception.InvalidTransactionException;
 
 import java.rmi.Remote;
 import java.rmi.RemoteException;
-import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -17,20 +18,20 @@ import java.util.Set;
  * file.
  */
 
-public interface ResourceManager extends Remote {
+public interface ResourceManager<K> extends Remote {
     /**
      * The RMI names a ResourceManager binds to.
      */
     String RMINameFlights = "RMFlights";
     String RMINameRooms = "RMRooms";
     String RMINameCars = "RMCars";
-    String RMINameCustomers = "RMCustomers";
+    String RMINameReservations = "RMReservations";
 
     Set getTransactions() throws RemoteException;
 
-    Collection getUpdatedRows(int xid, String tableName) throws RemoteException;
+    List<ResourceItem<K>> getUpdatedRows(int xid, String tableName) throws RemoteException;
 
-    Collection getUpdatedRows(String tableName) throws RemoteException;
+    List<ResourceItem<K>> getUpdatedRows(String tableName) throws RemoteException;
 
     void setDieTime(DieTime dieTime) throws RemoteException;
 
@@ -42,17 +43,17 @@ public interface ResourceManager extends Remote {
 
     String getID() throws RemoteException;
 
-    Collection query(int xid, String tableName) throws DeadlockException, InvalidTransactionException, RemoteException;
+    List<ResourceItem<K>> query(int xid, String tableName) throws DeadlockException, InvalidTransactionException, RemoteException;
 
-    ResourceItem query(int xid, String tableName, Object key) throws DeadlockException, InvalidTransactionException, RemoteException;
+    ResourceItem<K> query(int xid, String tableName, K key) throws DeadlockException, InvalidTransactionException, RemoteException;
 
-    Collection query(int xid, String tableName, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, InvalidIndexException, RemoteException;
+    List<ResourceItem<K>> query(int xid, String tableName, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, InvalidIndexException, RemoteException;
 
-    boolean update(int xid, String tableName, Object key, ResourceItem newItem) throws DeadlockException, InvalidTransactionException, RemoteException;
+    boolean update(int xid, String tableName, K key, ResourceItem<K> newItem) throws DeadlockException, InvalidTransactionException, RemoteException;
 
-    boolean insert(int xid, String tableName, ResourceItem newItem) throws DeadlockException, InvalidTransactionException, RemoteException;
+    boolean insert(int xid, String tableName, ResourceItem<K> newItem) throws DeadlockException, InvalidTransactionException, RemoteException;
 
-    boolean delete(int xid, String tableName, Object key) throws DeadlockException, InvalidTransactionException, RemoteException;
+    boolean delete(int xid, String tableName, K key) throws DeadlockException, InvalidTransactionException, RemoteException;
 
     int delete(int xid, String tableName, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, InvalidIndexException, RemoteException;
 

@@ -1,8 +1,13 @@
 package transaction;
 
+import transaction.exception.InvalidTransactionException;
+import transaction.exception.TransactionAbortedException;
+
 import java.rmi.Naming;
 import java.rmi.RMISecurityManager;
 import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Workflow Controller for the Distributed Travel Reservation System.
@@ -12,12 +17,10 @@ import java.rmi.RemoteException;
  * instead of doing the things itself.
  */
 
-public class WorkflowControllerImpl
-        extends java.rmi.server.UnicastRemoteObject
-        implements WorkflowController {
+public class WorkflowControllerImpl extends UnicastRemoteObject implements WorkflowController {
 
-    protected int flightcounter, flightprice, carscounter, carsprice, roomscounter, roomsprice;
-    protected int xidCounter;
+    protected int flightCounter, flightPrice, carsCounter, carsPrice, roomsCounter, roomsPrice;
+    protected AtomicInteger xidCounter;
 
     protected ResourceManager rmFlights = null;
     protected ResourceManager rmRooms = null;
@@ -26,15 +29,15 @@ public class WorkflowControllerImpl
     protected TransactionManager tm = null;
 
     public WorkflowControllerImpl() throws RemoteException {
-        flightcounter = 0;
-        flightprice = 0;
-        carscounter = 0;
-        carsprice = 0;
-        roomscounter = 0;
-        roomsprice = 0;
-        flightprice = 0;
+        flightCounter = 0;
+        flightPrice = 0;
+        carsCounter = 0;
+        carsPrice = 0;
+        roomsCounter = 0;
+        roomsPrice = 0;
+        flightPrice = 0;
 
-        xidCounter = 1;
+        xidCounter = new AtomicInteger(1);
 
         while (!reconnect()) {
             // would be better to sleep a while
@@ -62,175 +65,113 @@ public class WorkflowControllerImpl
     }
 
     // TRANSACTION INTERFACE
-    public int start()
-            throws RemoteException {
-        return (xidCounter++);
+    public int start() throws RemoteException {
+        return xidCounter.getAndIncrement();
     }
 
-    public boolean commit(int xid)
-            throws RemoteException,
-            TransactionAbortedException,
-            InvalidTransactionException {
+    public boolean commit(int xid) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         System.out.println("Committing");
         return true;
     }
 
-    public void abort(int xid)
-            throws RemoteException,
-            InvalidTransactionException {
-        return;
+    public void abort(int xid) throws RemoteException, InvalidTransactionException {
     }
 
 
     // ADMINISTRATIVE INTERFACE
-    public boolean addFlight(int xid, String flightNum, int numSeats, int price)
-            throws RemoteException,
-            TransactionAbortedException,
-            InvalidTransactionException {
-        flightcounter += numSeats;
-        flightprice = price;
+    public boolean addFlight(int xid, String flightNum, int numSeats, int price) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+        flightCounter += numSeats;
+        flightPrice = price;
         return true;
     }
 
-    public boolean deleteFlight(int xid, String flightNum)
-            throws RemoteException,
-            TransactionAbortedException,
-            InvalidTransactionException {
-        flightcounter = 0;
-        flightprice = 0;
+    public boolean deleteFlight(int xid, String flightNum) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+        flightCounter = 0;
+        flightPrice = 0;
         return true;
     }
 
-    public boolean addRooms(int xid, String location, int numRooms, int price)
-            throws RemoteException,
-            TransactionAbortedException,
-            InvalidTransactionException {
-        roomscounter += numRooms;
-        roomsprice = price;
+    public boolean addRooms(int xid, String location, int numRooms, int price) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+        roomsCounter += numRooms;
+        roomsPrice = price;
         return true;
     }
 
-    public boolean deleteRooms(int xid, String location, int numRooms)
-            throws RemoteException,
-            TransactionAbortedException,
-            InvalidTransactionException {
-        roomscounter = 0;
-        roomsprice = 0;
+    public boolean deleteRooms(int xid, String location, int numRooms) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+        roomsCounter = 0;
+        roomsPrice = 0;
         return true;
     }
 
-    public boolean addCars(int xid, String location, int numCars, int price)
-            throws RemoteException,
-            TransactionAbortedException,
-            InvalidTransactionException {
-        carscounter += numCars;
-        carsprice = price;
+    public boolean addCars(int xid, String location, int numCars, int price) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+        carsCounter += numCars;
+        carsPrice = price;
         return true;
     }
 
-    public boolean deleteCars(int xid, String location, int numCars)
-            throws RemoteException,
-            TransactionAbortedException,
-            InvalidTransactionException {
-        carscounter = 0;
-        carsprice = 0;
+    public boolean deleteCars(int xid, String location, int numCars) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+        carsCounter = 0;
+        carsPrice = 0;
         return true;
     }
 
-    public boolean newCustomer(int xid, String custName)
-            throws RemoteException,
-            TransactionAbortedException,
-            InvalidTransactionException {
+    public boolean newCustomer(int xid, String custName) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         return true;
     }
 
-    public boolean deleteCustomer(int xid, String custName)
-            throws RemoteException,
-            TransactionAbortedException,
-            InvalidTransactionException {
+    public boolean deleteCustomer(int xid, String custName) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         return true;
     }
 
 
     // QUERY INTERFACE
-    public int queryFlight(int xid, String flightNum)
-            throws RemoteException,
-            TransactionAbortedException,
-            InvalidTransactionException {
-        return flightcounter;
+    public int queryFlight(int xid, String flightNum) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+        return flightCounter;
     }
 
-    public int queryFlightPrice(int xid, String flightNum)
-            throws RemoteException,
-            TransactionAbortedException,
-            InvalidTransactionException {
-        return flightprice;
+    public int queryFlightPrice(int xid, String flightNum) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+        return flightPrice;
     }
 
-    public int queryRooms(int xid, String location)
-            throws RemoteException,
-            TransactionAbortedException,
-            InvalidTransactionException {
-        return roomscounter;
+    public int queryRooms(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+        return roomsCounter;
     }
 
-    public int queryRoomsPrice(int xid, String location)
-            throws RemoteException,
-            TransactionAbortedException,
-            InvalidTransactionException {
-        return roomsprice;
+    public int queryRoomsPrice(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+        return roomsPrice;
     }
 
-    public int queryCars(int xid, String location)
-            throws RemoteException,
-            TransactionAbortedException,
-            InvalidTransactionException {
-        return carscounter;
+    public int queryCars(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+        return carsCounter;
     }
 
-    public int queryCarsPrice(int xid, String location)
-            throws RemoteException,
-            TransactionAbortedException,
-            InvalidTransactionException {
-        return carsprice;
+    public int queryCarsPrice(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+        return carsPrice;
     }
 
-    public int queryCustomerBill(int xid, String custName)
-            throws RemoteException,
-            TransactionAbortedException,
-            InvalidTransactionException {
+    public int queryCustomerBill(int xid, String custName) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         return 0;
     }
 
 
     // RESERVATION INTERFACE
-    public boolean reserveFlight(int xid, String custName, String flightNum)
-            throws RemoteException,
-            TransactionAbortedException,
-            InvalidTransactionException {
-        flightcounter--;
+    public boolean reserveFlight(int xid, String custName, String flightNum) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+        flightCounter--;
         return true;
     }
 
-    public boolean reserveCar(int xid, String custName, String location)
-            throws RemoteException,
-            TransactionAbortedException,
-            InvalidTransactionException {
-        carscounter--;
+    public boolean reserveCar(int xid, String custName, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+        carsCounter--;
         return true;
     }
 
-    public boolean reserveRoom(int xid, String custName, String location)
-            throws RemoteException,
-            TransactionAbortedException,
-            InvalidTransactionException {
-        roomscounter--;
+    public boolean reserveRoom(int xid, String custName, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+        roomsCounter--;
         return true;
     }
 
     // TECHNICAL/TESTING INTERFACE
-    public boolean reconnect()
-            throws RemoteException {
+    public boolean reconnect() throws RemoteException {
         String rmiPort = System.getProperty("rmiPort");
         if (rmiPort == null) {
             rmiPort = "";
@@ -239,25 +180,15 @@ public class WorkflowControllerImpl
         }
 
         try {
-            rmFlights =
-                    (ResourceManager) Naming.lookup(rmiPort +
-                            ResourceManager.RMINameFlights);
+            rmFlights = (ResourceManager) Naming.lookup(rmiPort + ResourceManager.RMINameFlights);
             System.out.println("WC bound to RMFlights");
-            rmRooms =
-                    (ResourceManager) Naming.lookup(rmiPort +
-                            ResourceManager.RMINameRooms);
+            rmRooms = (ResourceManager) Naming.lookup(rmiPort + ResourceManager.RMINameRooms);
             System.out.println("WC bound to RMRooms");
-            rmCars =
-                    (ResourceManager) Naming.lookup(rmiPort +
-                            ResourceManager.RMINameCars);
+            rmCars = (ResourceManager) Naming.lookup(rmiPort + ResourceManager.RMINameCars);
             System.out.println("WC bound to RMCars");
-            rmCustomers =
-                    (ResourceManager) Naming.lookup(rmiPort +
-                            ResourceManager.RMINameCustomers);
+            rmCustomers = (ResourceManager) Naming.lookup(rmiPort + ResourceManager.RMINameReservations);
             System.out.println("WC bound to RMCustomers");
-            tm =
-                    (TransactionManager) Naming.lookup(rmiPort +
-                            TransactionManager.RMIName);
+            tm = (TransactionManager) Naming.lookup(rmiPort + TransactionManager.RMIName);
             System.out.println("WC bound to TM");
         } catch (Exception e) {
             System.err.println("WC cannot bind to some component:" + e);
@@ -265,8 +196,7 @@ public class WorkflowControllerImpl
         }
 
         try {
-            if (rmFlights.reconnect() && rmRooms.reconnect() &&
-                    rmCars.reconnect() && rmCustomers.reconnect()) {
+            if (rmFlights.reconnect() && rmRooms.reconnect() && rmCars.reconnect() && rmCustomers.reconnect()) {
                 return true;
             }
         } catch (Exception e) {
@@ -277,8 +207,7 @@ public class WorkflowControllerImpl
         return false;
     }
 
-    public boolean dieNow(String who)
-            throws RemoteException {
+    public boolean dieNow(String who) throws RemoteException {
         if (who.equals(TransactionManager.RMIName) ||
                 who.equals("ALL")) {
             try {
@@ -307,7 +236,7 @@ public class WorkflowControllerImpl
             } catch (RemoteException ignored) {
             }
         }
-        if (who.equals(ResourceManager.RMINameCustomers) ||
+        if (who.equals(ResourceManager.RMINameReservations) ||
                 who.equals("ALL")) {
             try {
                 rmCustomers.dieNow();
@@ -321,38 +250,31 @@ public class WorkflowControllerImpl
         return true;
     }
 
-    public boolean dieRMAfterEnlist(String who)
-            throws RemoteException {
+    public boolean dieRMAfterEnlist(String who) throws RemoteException {
         return true;
     }
 
-    public boolean dieRMBeforePrepare(String who)
-            throws RemoteException {
+    public boolean dieRMBeforePrepare(String who) throws RemoteException {
         return true;
     }
 
-    public boolean dieRMAfterPrepare(String who)
-            throws RemoteException {
+    public boolean dieRMAfterPrepare(String who) throws RemoteException {
         return true;
     }
 
-    public boolean dieTMBeforeCommit()
-            throws RemoteException {
+    public boolean dieTMBeforeCommit() throws RemoteException {
         return true;
     }
 
-    public boolean dieTMAfterCommit()
-            throws RemoteException {
+    public boolean dieTMAfterCommit() throws RemoteException {
         return true;
     }
 
-    public boolean dieRMBeforeCommit(String who)
-            throws RemoteException {
+    public boolean dieRMBeforeCommit(String who) throws RemoteException {
         return true;
     }
 
-    public boolean dieRMBeforeAbort(String who)
-            throws RemoteException {
+    public boolean dieRMBeforeAbort(String who) throws RemoteException {
         return true;
     }
 }

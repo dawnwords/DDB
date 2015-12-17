@@ -11,7 +11,7 @@ import java.rmi.RemoteException;
 public class RMManagerHotels {
     public static void main(String[] args) {
         try {
-            new ResourceManagerImpl(ResourceManager.RMINameRooms).start();
+            new ResourceManagerImpl<String>(ResourceManager.RMINameRooms).start();
         } catch (RemoteException e) {
             e.printStackTrace();
         }
