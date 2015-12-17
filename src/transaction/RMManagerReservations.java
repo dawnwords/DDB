@@ -10,7 +10,7 @@ import transaction.bean.ReservationKey;
 
 import java.rmi.RemoteException;
 
-public class RMManagerCustomers {
+public class RMManagerReservations {
     public static void main(String[] args) {
         try {
             new ResourceManagerImpl<ReservationKey>(ResourceManager.RMINameReservations).start();
