@@ -15,7 +15,6 @@ import java.rmi.Naming;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
-import java.rmi.server.UnicastRemoteObject;
 import java.util.*;
 
 /**
@@ -24,30 +23,23 @@ import java.util.*;
  * Description: toy implementation of the RM
  */
 
-public class ResourceManagerImpl<K> extends UnicastRemoteObject implements ResourceManager<K> {
+public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     private final static String TRANSACTION_LOG_FILENAME = "transactions.log";
-    private String myRMIName;
-    private DieTime dieTime;
     private HashSet<Integer> xids;
     private LockManager lm;
     private Hashtable<Integer, Hashtable<String, RMTable<K>>> tables;
     private TMDaemon tmDaemon;
 
-    public ResourceManagerImpl(String rmiName) throws RemoteException {
-        myRMIName = rmiName;
-        dieTime = DieTime.NO_DIE;
+    public ResourceManagerImpl(HostName rmiName) throws RemoteException {
+        super(rmiName);
         xids = new HashSet<Integer>();
         lm = new LockManager();
         tables = new Hashtable<Integer, Hashtable<String, RMTable<K>>>();
         tmDaemon = new TMDaemon();
     }
 
-    public ResourceManagerImpl() throws RemoteException {
-        this(null);
-    }
-
     public void start() {
-        if (myRMIName == null || "".equals(myRMIName)) {
+        if (myRMIName == null) {
             throw new IllegalStateException("No RMI name given");
         }
         recover();
@@ -100,17 +92,10 @@ public class ResourceManagerImpl<K> extends UnicastRemoteObject implements Resou
         String rmiPort = getProperty("rm." + myRMIName + ".port");
         try {
             Registry rmiRegistry = LocateRegistry.createRegistry(Integer.parseInt(rmiPort));
-            rmiRegistry.bind(myRMIName, this);
+            rmiRegistry.bind(myRMIName.name(), this);
             System.out.println(myRMIName + " bound");
         } catch (Exception e) {
             throw new RuntimeException(myRMIName + " not bound:" + e);
-        }
-    }
-
-    private void sleepForAWhile() {
-        try {
-            Thread.sleep(500);
-        } catch (InterruptedException ignored) {
         }
     }
 
@@ -120,42 +105,25 @@ public class ResourceManagerImpl<K> extends UnicastRemoteObject implements Resou
     }
 
     @Override
-    public List<ResourceItem<K>> getUpdatedRows(int xid, String tableName) {
-        RMTable<K> table = getTable(xid, tableName);
+    public List<ResourceItem<K>> getUpdatedRows(int xid) {
+        RMTable<K> table = getTable(xid, myRMIName.name());
         return new ArrayList<ResourceItem<K>>(table.table.values());
     }
 
     @Override
-    public List<ResourceItem<K>> getUpdatedRows(String tableName) {
-        RMTable<K> table = getTable(tableName);
+    public List<ResourceItem<K>> getUpdatedRows() {
+        RMTable<K> table = getTable(myRMIName.name());
         return new ArrayList<ResourceItem<K>>(table.table.values());
-    }
-
-    @Override
-    public void setDieTime(DieTime dieTime) throws RemoteException {
-        this.dieTime = dieTime;
-        System.out.println("Die time set to : " + dieTime);
     }
 
     @Override
     public String getID() throws RemoteException {
-        return myRMIName;
-    }
-
-    @Override
-    public void ping() {
+        return myRMIName.name();
     }
 
     @Override
     public boolean reconnect() {
         return tmDaemon.reconnect();
-    }
-
-    @Override
-    public boolean dieNow() throws RemoteException {
-        sleepForAWhile();
-        System.exit(1);
-        return true;
     }
 
     public TransactionManager getTransactionManager() throws TransactionManagerUnaccessibleException {
@@ -218,38 +186,23 @@ public class ResourceManagerImpl<K> extends UnicastRemoteObject implements Resou
     }
 
     @Override
-    public List<ResourceItem<K>> query(int xid, String tableName) throws DeadlockException, InvalidTransactionException, RemoteException {
-        addXid(xid);
-
-        ArrayList<ResourceItem<K>> result = new ArrayList<ResourceItem<K>>();
-        RMTable<K> table = getTable(xid, tableName);
-        synchronized (table) {
-            for (K key : table.keySet()) {
-                ResourceItem<K> item = table.get(key);
-                if (item != null && !item.isDeleted()) {
-                    table.lock(key, LockType.READ);
-                    result.add(item);
-                }
-            }
-            if (!result.isEmpty()) {
-                if (!storeTable(xid, tableName, table)) {
-                    throw new RemoteException("System Error: Can't write table to disk!");
-                }
-            }
+    public List<ResourceItem<K>> query(int xid) throws DeadlockException, InvalidTransactionException, RemoteException {
+        try {
+            return query(xid, null, null);
+        } catch (InvalidIndexException ignored) {
         }
-        return result;
+        return null;
     }
 
-
     @Override
-    public ResourceItem<K> query(int xid, String tableName, K key) throws DeadlockException, InvalidTransactionException, RemoteException {
+    public ResourceItem<K> query(int xid, K key) throws DeadlockException, InvalidTransactionException, RemoteException {
         addXid(xid);
 
-        RMTable<K> table = getTable(xid, tableName);
+        RMTable<K> table = getTable(xid, myRMIName.name());
         ResourceItem<K> item = table.get(key);
         if (item != null && !item.isDeleted()) {
             table.lock(key, LockType.READ);
-            if (!storeTable(xid, tableName, table)) {
+            if (!storeTable(xid, myRMIName.name(), table)) {
                 throw new RemoteException("System Error: Can't write table to disk!");
             }
             return item;
@@ -258,21 +211,24 @@ public class ResourceManagerImpl<K> extends UnicastRemoteObject implements Resou
     }
 
     @Override
-    public List<ResourceItem<K>> query(int xid, String tableName, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, InvalidIndexException, RemoteException {
+    public List<ResourceItem<K>> query(int xid, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, InvalidIndexException, RemoteException {
         addXid(xid);
 
         List<ResourceItem<K>> result = new ArrayList<ResourceItem<K>>();
-        RMTable<K> table = getTable(xid, tableName);
+        RMTable<K> table = getTable(xid, myRMIName.name());
+
         synchronized (table) {
             for (K key : table.keySet()) {
                 ResourceItem<K> item = table.get(key);
-                if (item != null && !item.isDeleted() && item.getIndex(indexName).equals(indexVal)) {
-                    table.lock(key, LockType.READ);
-                    result.add(item);
+                if (item != null && !item.isDeleted()) {
+                    if (indexName == null || item.getIndex(indexName).equals(indexVal)) {
+                        table.lock(key, LockType.READ);
+                        result.add(item);
+                    }
                 }
             }
             if (!result.isEmpty()) {
-                if (!storeTable(xid, tableName, table)) {
+                if (!storeTable(xid, myRMIName.name(), table)) {
                     throw new RemoteException("System Error: Can't write table to disk!");
                 }
             }
@@ -281,18 +237,18 @@ public class ResourceManagerImpl<K> extends UnicastRemoteObject implements Resou
     }
 
     @Override
-    public boolean update(int xid, String tableName, K key, ResourceItem<K> newItem) throws DeadlockException, InvalidTransactionException, RemoteException {
+    public boolean update(int xid, K key, ResourceItem<K> newItem) throws DeadlockException, InvalidTransactionException, RemoteException {
         if (!key.equals(newItem.getKey()))
             throw new IllegalArgumentException();
 
         addXid(xid);
 
-        RMTable<K> table = getTable(xid, tableName);
+        RMTable<K> table = getTable(xid, myRMIName.name());
         ResourceItem<K> item = table.get(key);
         if (item != null && !item.isDeleted()) {
             table.lock(key, LockType.WRITE);
             table.put(newItem);
-            if (!storeTable(xid, tableName, table)) {
+            if (!storeTable(xid, myRMIName.name(), table)) {
                 throw new RemoteException("System Error: Can't write table to disk!");
             }
             return true;
@@ -301,34 +257,34 @@ public class ResourceManagerImpl<K> extends UnicastRemoteObject implements Resou
     }
 
     @Override
-    public boolean insert(int xid, String tableName, ResourceItem<K> newItem) throws DeadlockException, InvalidTransactionException, RemoteException {
+    public boolean insert(int xid, ResourceItem<K> newItem) throws DeadlockException, InvalidTransactionException, RemoteException {
         addXid(xid);
 
-        RMTable<K> table = getTable(xid, tableName);
+        RMTable<K> table = getTable(xid, myRMIName.name());
         ResourceItem<K> item = table.get(newItem.getKey());
         if (item != null && !item.isDeleted()) {
             return false;
         }
         table.lock(newItem.getKey(), LockType.WRITE);
         table.put(newItem);
-        if (!storeTable(xid, tableName, table)) {
+        if (!storeTable(xid, myRMIName.name(), table)) {
             throw new RemoteException("System Error: Can't write table to disk!");
         }
         return true;
     }
 
     @Override
-    public boolean delete(int xid, String tableName, K key) throws DeadlockException, InvalidTransactionException, RemoteException {
+    public boolean delete(int xid, K key) throws DeadlockException, InvalidTransactionException, RemoteException {
         addXid(xid);
 
-        RMTable<K> table = getTable(xid, tableName);
+        RMTable<K> table = getTable(xid, myRMIName.name());
         ResourceItem<K> item = table.get(key);
         if (item != null && !item.isDeleted()) {
             table.lock(key, LockType.WRITE);
             item = item.clone();
             item.delete();
             table.put(item);
-            if (!storeTable(xid, tableName, table)) {
+            if (!storeTable(xid, myRMIName.name(), table)) {
                 throw new RemoteException("System Error: Can't write table to disk!");
             }
             return true;
@@ -337,11 +293,11 @@ public class ResourceManagerImpl<K> extends UnicastRemoteObject implements Resou
     }
 
     @Override
-    public int delete(int xid, String tableName, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, InvalidIndexException, RemoteException {
+    public int delete(int xid, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, InvalidIndexException, RemoteException {
         addXid(xid);
 
         int n = 0;
-        RMTable<K> table = getTable(xid, tableName);
+        RMTable<K> table = getTable(xid, myRMIName.name());
         synchronized (table) {
             for (K key : table.keySet()) {
                 ResourceItem<K> item = table.get(key);
@@ -354,7 +310,7 @@ public class ResourceManagerImpl<K> extends UnicastRemoteObject implements Resou
                 }
             }
             if (n > 0) {
-                if (!storeTable(xid, tableName, table)) {
+                if (!storeTable(xid, myRMIName.name(), table)) {
                     throw new RemoteException("System Error: Can't write table to disk!");
                 }
             }
@@ -384,8 +340,9 @@ public class ResourceManagerImpl<K> extends UnicastRemoteObject implements Resou
 
     @Override
     public boolean prepare(int xid) throws InvalidTransactionException, RemoteException {
-        if (dieTime == DieTime.BEFORE_PREPARE)
+        if (dieTime == DieTime.BEFORE_PREPARE) {
             dieNow();
+        }
         if (xid < 0) {
             throw new InvalidTransactionException(xid, "Xid must be positive.");
         }
@@ -399,7 +356,7 @@ public class ResourceManagerImpl<K> extends UnicastRemoteObject implements Resou
         if (dieTime == DieTime.BEFORE_COMMIT) {
             dieNow();
         }
-        commitOrAbort(xid, true);
+        end(xid, true);
     }
 
     @Override
@@ -407,10 +364,10 @@ public class ResourceManagerImpl<K> extends UnicastRemoteObject implements Resou
         if (dieTime == DieTime.BEFORE_ABORT) {
             dieNow();
         }
-        commitOrAbort(xid, false);
+        end(xid, false);
     }
 
-    private void commitOrAbort(int xid, boolean commit) throws InvalidTransactionException, RemoteException {
+    private void end(int xid, boolean commit) throws InvalidTransactionException, RemoteException {
         if (xid < 0) {
             throw new InvalidTransactionException(xid, "Xid must be positive.");
         }
@@ -480,7 +437,10 @@ public class ResourceManagerImpl<K> extends UnicastRemoteObject implements Resou
                     reconnect();
                     System.out.println("reconnect tm!");
                 }
-                sleepForAWhile();
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException ignored) {
+                }
             }
         }
 
@@ -497,7 +457,7 @@ public class ResourceManagerImpl<K> extends UnicastRemoteObject implements Resou
             }
 
             try {
-                tm = (TransactionManager) Naming.lookup(rmiPort + TransactionManager.RMIName);
+                tm = (TransactionManager) Naming.lookup(rmiPort + HostName.TM);
                 System.out.println(myRMIName + "'s xids is Empty ? " + xids.isEmpty());
                 for (Integer xid : xids) {
                     System.out.println(myRMIName + " Re-enlist to TM with xid" + xid);

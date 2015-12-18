@@ -11,7 +11,7 @@ import java.rmi.RemoteException;
 public class RMManagerFlights {
     public static void main(String[] args) {
         try {
-            new ResourceManagerImpl<Integer>(ResourceManager.RMINameFlights).start();
+            new ResourceManagerImpl<Integer>(Host.HostName.RMFlights).start();
         } catch (RemoteException e) {
             e.printStackTrace();
         }

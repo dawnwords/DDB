@@ -13,7 +13,7 @@ import java.rmi.RemoteException;
 public class RMManagerReservations {
     public static void main(String[] args) {
         try {
-            new ResourceManagerImpl<ReservationKey>(ResourceManager.RMINameReservations).start();
+            new ResourceManagerImpl<ReservationKey>(Host.HostName.RMReservations).start();
         } catch (RemoteException e) {
             e.printStackTrace();
         }

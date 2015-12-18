@@ -37,11 +37,6 @@ public interface WorkflowController extends Remote {
     //////////
 
     /**
-     * The RMI name a WorkflowController binds to.
-     */
-    String RMIName = "WC";
-
-    /**
      * Start a new transaction, and return its transaction id.
      *
      * @return A unique transaction ID > 0.  Return <=0 if server is not accepting new transactions.
@@ -282,7 +277,7 @@ public interface WorkflowController extends Remote {
      * @param who which component to kill; must be "TM", "RMFlights", "RMRooms", "RMCars", "RMCustomers", "WC", or "ALL" (which kills all 6 in that order).
      * @return true on success, false on failure.
      */
-    boolean dieNow(String who) throws RemoteException;
+    boolean dieNow(Host.HostName who) throws RemoteException;
 
     /**
      * Sets a flag so that the RM fails after the next enlist()
@@ -295,7 +290,7 @@ public interface WorkflowController extends Remote {
      * @param who which RM to kill; must be "RMFlights", "RMRooms", "RMCars", or "RMCustomers".
      * @return true on success, false on failure.
      */
-    boolean dieRMAfterEnlist(String who) throws RemoteException;
+    boolean dieRMAfterEnlist(Host.HostName who) throws RemoteException;
 
     /**
      * Sets a flag so that the RM fails when it next tries to prepare,
@@ -306,7 +301,7 @@ public interface WorkflowController extends Remote {
      * @param who which RM to kill; must be "RMFlights", "RMRooms", "RMCars", or "RMCustomers".
      * @return true on success, false on failure.
      */
-    boolean dieRMBeforePrepare(String who) throws RemoteException;
+    boolean dieRMBeforePrepare(Host.HostName who) throws RemoteException;
 
     /**
      * Sets a flag so that the RM fails when it next tries to prepare:
@@ -318,7 +313,31 @@ public interface WorkflowController extends Remote {
      * @param who which RM to kill; must be "RMFlights", "RMRooms", "RMCars", or "RMCustomers".
      * @return true on success, false on failure.
      */
-    boolean dieRMAfterPrepare(String who) throws RemoteException;
+    boolean dieRMAfterPrepare(Host.HostName who) throws RemoteException;
+
+    /**
+     * Sets a flag so that the RM fails when it is told by the TM to
+     * commit, by before it could actually change the database content
+     * (i.e., die at beginning of the commit() function called by TM).
+     * <p/>
+     * This method is used for testing and is not part of a transaction.
+     *
+     * @param who which RM to kill; must be "RMFlights", "RMRooms", "RMCars", or "RMCustomers".
+     * @return true on success, false on failure.
+     */
+    boolean dieRMBeforeCommit(Host.HostName who) throws RemoteException;
+
+    /**
+     * Sets a flag so that the RM fails when it is told by the TM to
+     * abort, by before it could actually do anything.  (i.e., die at
+     * beginning of the abort() function called by TM).
+     * <p/>
+     * This method is used for testing and is not part of a transaction.
+     *
+     * @param who which RM to kill; must be "RMFlights", "RMRooms", "RMCars", or "RMCustomers".
+     * @return true on success, false on failure.
+     */
+    boolean dieRMBeforeAbort(Host.HostName who) throws RemoteException;
 
     /**
      * Sets a flag so that the TM fails after it has received
@@ -341,27 +360,7 @@ public interface WorkflowController extends Remote {
      */
     boolean dieTMAfterCommit() throws RemoteException;
 
-    /**
-     * Sets a flag so that the RM fails when it is told by the TM to
-     * commit, by before it could actually change the database content
-     * (i.e., die at beginning of the commit() function called by TM).
-     * <p/>
-     * This method is used for testing and is not part of a transaction.
-     *
-     * @param who which RM to kill; must be "RMFlights", "RMRooms", "RMCars", or "RMCustomers".
-     * @return true on success, false on failure.
-     */
-    boolean dieRMBeforeCommit(String who) throws RemoteException;
+    void ping() throws RemoteException;
 
-    /**
-     * Sets a flag so that the RM fails when it is told by the TM to
-     * abort, by before it could actually do anything.  (i.e., die at
-     * beginning of the abort() function called by TM).
-     * <p/>
-     * This method is used for testing and is not part of a transaction.
-     *
-     * @param who which RM to kill; must be "RMFlights", "RMRooms", "RMCars", or "RMCustomers".
-     * @return true on success, false on failure.
-     */
-    boolean dieRMBeforeAbort(String who) throws RemoteException;
+    boolean dieNow() throws RemoteException;
 }

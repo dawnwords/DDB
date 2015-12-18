@@ -13,14 +13,19 @@ import java.rmi.RemoteException;
 
 public interface TransactionManager extends Remote {
 
-    /**
-     * The RMI name a TransactionManager binds to.
-     */
-    String RMIName = "TM";
+    boolean start(int xid) throws RemoteException;
 
-    boolean dieNow() throws RemoteException;
+    boolean commit(int xid) throws RemoteException;
+
+    boolean abort(int xid) throws RemoteException;
+
+    void enlist(int xid, ResourceManager rm) throws RemoteException;
 
     void ping() throws RemoteException;
 
-    void enlist(int xid, ResourceManager rm) throws RemoteException;
+    boolean dieNow() throws RemoteException;
+
+    void setDieTime(DieTime dieTime) throws RemoteException;
+
+    boolean reconnect() throws RemoteException;
 }
