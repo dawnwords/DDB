@@ -134,15 +134,15 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
             return tm;
     }
 
-    protected RMTable<K> loadTable(int xid, String tableName) {
+    private RMTable<K> loadTable(int xid, String tableName) {
         return IOUtil.readObject("data" + File.separator + (xid == -1 ? "" : xid + File.separator) + tableName);
     }
 
-    protected boolean storeTable(int xid, String tableName, RMTable table) {
+    private boolean storeTable(int xid, String tableName, RMTable table) {
         return IOUtil.writeObject("data" + File.separator + xid, tableName, table);
     }
 
-    protected RMTable<K> getTable(int xid, String tableName) {
+    private RMTable<K> getTable(int xid, String tableName) {
         Hashtable<String, RMTable<K>> xidTables;
         synchronized (tables) {
             xidTables = tables.get(xid);
@@ -173,15 +173,15 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         }
     }
 
-    protected RMTable<K> getTable(String tableName) {
+    private RMTable<K> getTable(String tableName) {
         return getTable(-1, tableName);
     }
 
-    protected HashSet<Integer> loadTransactionLogs() {
+    private HashSet<Integer> loadTransactionLogs() {
         return IOUtil.readObject("data" + File.separator + "transactions.log");
     }
 
-    protected boolean storeTransactionLogs(HashSet<Integer> xids) {
+    private boolean storeTransactionLogs(HashSet<Integer> xids) {
         return IOUtil.writeObject("data", "transactions.log", xids);
     }
 
@@ -293,7 +293,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     @Override
-    public int delete(int xid, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, InvalidIndexException, RemoteException {
+    public int delete(int xid, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, RemoteException {
         addXid(xid);
 
         int n = 0;
@@ -444,11 +444,11 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
             }
         }
 
-        public TransactionManager get() {
+        TransactionManager get() {
             return tm;
         }
 
-        public boolean reconnect() {
+        boolean reconnect() {
             String rmiPort = getProperty("tm.port");
             if (rmiPort == null) {
                 rmiPort = "";

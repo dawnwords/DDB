@@ -1,5 +1,7 @@
 package transaction;
 
+import lockmgr.DeadlockException;
+import transaction.bean.*;
 import transaction.exception.InvalidTransactionException;
 import transaction.exception.TransactionAbortedException;
 
@@ -7,6 +9,7 @@ import java.rmi.Naming;
 import java.rmi.RMISecurityManager;
 import java.rmi.RemoteException;
 import java.util.Hashtable;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -19,7 +22,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class WorkflowControllerImpl extends Host implements WorkflowController {
 
-    private int flightCounter, flightPrice, carsCounter, carsPrice, roomsCounter, roomsPrice;
     private AtomicInteger xidCounter;
 
     private RMTMDaemon daemon;
@@ -73,111 +75,305 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     // ADMINISTRATIVE INTERFACE
     @Override
     public boolean addFlight(int xid, String flightNum, int numSeats, int price) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
-        flightCounter += numSeats;
-        flightPrice = price;
-        return true;
+        if (flightNum == null || numSeats < 0 || price < 0) {
+            return false;
+        }
+        RMManagerFlights flightRM = (RMManagerFlights) daemon.rm(HostName.RMFlights);
+        try {
+            if (flightRM.query(xid, flightNum) != null) {
+                return false;
+            }
+            flightRM.insert(xid, new Flight(flightNum, price, numSeats, numSeats));
+            return true;
+        } catch (DeadlockException e) {
+            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
+        }
     }
 
     @Override
     public boolean deleteFlight(int xid, String flightNum) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
-        flightCounter = 0;
-        flightPrice = 0;
-        return true;
+        if (flightNum == null) {
+            return false;
+        }
+        RMManagerFlights flightRM = (RMManagerFlights) daemon.rm(HostName.RMFlights);
+        RMManagerReservations reservationRM = (RMManagerReservations) daemon.rm(HostName.RMReservations);
+        try {
+            for (ResourceItem<ReservationKey> reservation : reservationRM.query(xid)) {
+                ReservationKey key = reservation.getKey();
+                if (key != null && key.resvType() == ReservationType.FLIGHT && flightNum.equals(key.resvKey())) {
+                    return false;
+                }
+            }
+            return flightRM.delete(xid, flightNum);
+        } catch (DeadlockException e) {
+            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
+        }
     }
 
     @Override
     public boolean addRooms(int xid, String location, int numRooms, int price) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
-        roomsCounter += numRooms;
-        roomsPrice = price;
-        return true;
+        if (location == null || numRooms < 0 || price < 0) {
+            return false;
+        }
+        RMManagerHotels roomRM = (RMManagerHotels) daemon.rm(HostName.RMRooms);
+        try {
+            if (roomRM.query(xid, location) != null) {
+                return false;
+            }
+            roomRM.insert(xid, new Hotel(location, price, numRooms, numRooms));
+            return true;
+        } catch (DeadlockException e) {
+            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
+        }
     }
 
     @Override
     public boolean deleteRooms(int xid, String location, int numRooms) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
-        roomsCounter = 0;
-        roomsPrice = 0;
-        return true;
+        if (location == null || numRooms < 0) {
+            return false;
+        }
+        RMManagerHotels roomRM = (RMManagerHotels) daemon.rm(HostName.RMRooms);
+        try {
+            Hotel hotel = (Hotel) roomRM.query(xid, location);
+            return !(hotel == null || hotel.numAvail() < numRooms) &&
+                    roomRM.update(xid, location, new Hotel(hotel.location(), hotel.price(), hotel.numRooms(), hotel.numAvail() - numRooms));
+        } catch (DeadlockException e) {
+            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
+        }
     }
 
     @Override
     public boolean addCars(int xid, String location, int numCars, int price) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
-        carsCounter += numCars;
-        carsPrice = price;
-        return true;
+        if (location == null || numCars < 0 || price < 0) {
+            return false;
+        }
+        RMManagerCars carRM = (RMManagerCars) daemon.rm(HostName.RMCars);
+        try {
+            if (carRM.query(xid, location) != null) {
+                return false;
+            }
+            carRM.insert(xid, new Car(location, price, numCars, numCars));
+            return true;
+        } catch (DeadlockException e) {
+            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
+        }
     }
 
     @Override
     public boolean deleteCars(int xid, String location, int numCars) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
-        carsCounter = 0;
-        carsPrice = 0;
-        return true;
+        if (location == null || numCars < 0) {
+            return false;
+        }
+        RMManagerCars carRM = (RMManagerCars) daemon.rm(HostName.RMCars);
+        try {
+            Car car = (Car) carRM.query(xid, location);
+            return !(car == null || car.numAvail() < numCars) &&
+                    carRM.update(xid, location, new Car(car.location(), car.price(), car.numCars(), car.numAvail() - numCars));
+        } catch (DeadlockException e) {
+            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
+        }
     }
 
     @Override
     public boolean newCustomer(int xid, String custName) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
-        return true;
+        if (custName == null) {
+            return false;
+        }
+        RMManagerCustomers customerRM = (RMManagerCustomers) daemon.rm(HostName.RMCustomers);
+        try {
+            return customerRM.query(xid, custName) == null && customerRM.insert(xid, new Customer(custName));
+        } catch (DeadlockException e) {
+            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
+        }
     }
 
     @Override
     public boolean deleteCustomer(int xid, String custName) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
-        return true;
+        if (custName == null) {
+            return false;
+        }
+        RMManagerCustomers customerRM = (RMManagerCustomers) daemon.rm(HostName.RMCustomers);
+        RMManagerReservations reservationRM = (RMManagerReservations) daemon.rm(HostName.RMReservations);
+        try {
+            return customerRM.query(xid, custName) != null &&
+                    customerRM.delete(xid, custName) &&
+                    reservationRM.delete(xid, "custName", custName) >= 0;
+        } catch (DeadlockException e) {
+            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
+        }
     }
-
 
     // QUERY INTERFACE
     @Override
     public int queryFlight(int xid, String flightNum) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
-        return flightCounter;
+        Flight flight = getFlight(xid, flightNum);
+        return flight == null ? -1 : flight.numAvail();
     }
 
     @Override
     public int queryFlightPrice(int xid, String flightNum) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
-        return flightPrice;
+        Flight flight = getFlight(xid, flightNum);
+        return flight == null ? -1 : flight.price();
+    }
+
+    private Flight getFlight(int xid, String flightNum) throws InvalidTransactionException, RemoteException, TransactionAbortedException {
+        if (flightNum == null) {
+            return null;
+        }
+        RMManagerFlights flightsRM = (RMManagerFlights) daemon.rm(HostName.RMFlights);
+        try {
+            return (Flight) flightsRM.query(xid, flightNum);
+        } catch (DeadlockException e) {
+            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
+        }
     }
 
     @Override
     public int queryRooms(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
-        return roomsCounter;
+        Hotel hotel = getRoom(xid, location);
+        return hotel == null ? -1 : hotel.numAvail();
     }
 
     @Override
     public int queryRoomsPrice(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
-        return roomsPrice;
+        Hotel hotel = getRoom(xid, location);
+        return hotel == null ? -1 : hotel.price();
+    }
+
+    private Hotel getRoom(int xid, String location) throws InvalidTransactionException, RemoteException, TransactionAbortedException {
+        if (location == null) {
+            return null;
+        }
+        RMManagerHotels roomRM = (RMManagerHotels) daemon.rm(HostName.RMRooms);
+        try {
+            return (Hotel) roomRM.query(xid, location);
+        } catch (DeadlockException e) {
+            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
+        }
     }
 
     @Override
     public int queryCars(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
-        return carsCounter;
+        Car car = getCar(xid, location);
+        return car == null ? -1 : car.numAvail();
     }
 
     @Override
     public int queryCarsPrice(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
-        return carsPrice;
+        Car car = getCar(xid, location);
+        return car == null ? -1 : car.price();
+    }
+
+    private Car getCar(int xid, String location) throws InvalidTransactionException, RemoteException, TransactionAbortedException {
+        if (location == null) {
+            return null;
+        }
+        RMManagerCars carRM = (RMManagerCars) daemon.rm(HostName.RMCars);
+        try {
+            return (Car) carRM.query(xid, location);
+        } catch (DeadlockException e) {
+            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
+        }
     }
 
     @Override
     public int queryCustomerBill(int xid, String custName) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
-        return 0;
+        if (custName == null) {
+            return -1;
+        }
+        RMManagerReservations reservationRM = (RMManagerReservations) daemon.rm(HostName.RMReservations);
+        RMManagerCars carRM = (RMManagerCars) daemon.rm(HostName.RMCars);
+        RMManagerHotels hotelRM = (RMManagerHotels) daemon.rm(HostName.RMRooms);
+        RMManagerFlights flightRM = (RMManagerFlights) daemon.rm(HostName.RMFlights);
+        try {
+            List<ResourceItem<ReservationKey>> reservations = reservationRM.query(xid, "custName", custName);
+            if (reservations == null || reservations.isEmpty()) {
+                return -1;
+            }
+            int result = 0;
+            for (ResourceItem<ReservationKey> reservation : reservations) {
+                ReservationKey key = reservation.getKey();
+                switch (key.resvType()) {
+                    case FLIGHT:
+                        Flight flight = (Flight) flightRM.query(xid, key.resvKey());
+                        result += flight.price();
+                        break;
+                    case CAR:
+                        Car car = (Car) carRM.query(xid, key.resvKey());
+                        result += car.price();
+                        break;
+                    case HOTEL:
+                        Hotel hotel = (Hotel) hotelRM.query(xid, key.resvKey());
+                        result += hotel.price();
+                        break;
+                }
+            }
+            return result;
+        } catch (DeadlockException e) {
+            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
+        }
     }
 
 
     // RESERVATION INTERFACE
     @Override
     public boolean reserveFlight(int xid, String custName, String flightNum) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
-        flightCounter--;
-        return true;
+        if (custName == null || flightNum == null) {
+            return false;
+        }
+        RMManagerFlights flightRM = (RMManagerFlights) daemon.rm(HostName.RMFlights);
+        RMManagerCustomers customerRM = (RMManagerCustomers) daemon.rm(HostName.RMCustomers);
+        RMManagerReservations reservationRM = (RMManagerReservations) daemon.rm(HostName.RMReservations);
+        try {
+            Flight flight = (Flight) flightRM.query(xid, flightNum);
+            return !(flight == null ||
+                    customerRM.query(xid, custName) == null ||
+                    reservationRM.query(xid, new ReservationKey(custName, ReservationType.FLIGHT, flightNum)) == null) &&
+                    reservationRM.insert(xid, new Reservation(custName, ReservationType.FLIGHT, flightNum)) &&
+                    flightRM.update(xid, flightNum, new Flight(flight.flightNum(), flight.price(), flight.numSeats(), flight.numAvail() - 1));
+        } catch (DeadlockException e) {
+            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
+        }
     }
 
     @Override
     public boolean reserveCar(int xid, String custName, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
-        carsCounter--;
-        return true;
+        if (custName == null || location == null) {
+            return false;
+        }
+        RMManagerCars carRM = (RMManagerCars) daemon.rm(HostName.RMCars);
+        RMManagerCustomers customerRM = (RMManagerCustomers) daemon.rm(HostName.RMCustomers);
+        RMManagerReservations reservationRM = (RMManagerReservations) daemon.rm(HostName.RMReservations);
+        try {
+            Car car = (Car) carRM.query(xid, location);
+            return !(car == null ||
+                    customerRM.query(xid, custName) == null ||
+                    reservationRM.query(xid, new ReservationKey(custName, ReservationType.CAR, location)) == null) &&
+                    reservationRM.insert(xid, new Reservation(custName, ReservationType.CAR, location)) &&
+                    carRM.update(xid, location, new Car(car.location(), car.price(), car.numCars(), car.numAvail() - 1));
+        } catch (DeadlockException e) {
+            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
+        }
     }
 
     @Override
     public boolean reserveRoom(int xid, String custName, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
-        roomsCounter--;
-        return true;
+        if (custName == null || location == null) {
+            return false;
+        }
+        RMManagerHotels hotelRM = (RMManagerHotels) daemon.rm(HostName.RMRooms);
+        RMManagerCustomers customerRM = (RMManagerCustomers) daemon.rm(HostName.RMCustomers);
+        RMManagerReservations reservationRM = (RMManagerReservations) daemon.rm(HostName.RMReservations);
+        try {
+            Hotel hotel = (Hotel) hotelRM.query(xid, location);
+            return !(hotel == null ||
+                    customerRM.query(xid, custName) == null ||
+                    reservationRM.query(xid, new ReservationKey(custName, ReservationType.CAR, location)) == null) &&
+                    reservationRM.insert(xid, new Reservation(custName, ReservationType.CAR, location)) &&
+                    hotelRM.update(xid, location, new Hotel(hotel.location(), hotel.price(), hotel.numRooms(), hotel.numAvail() - 1));
+        } catch (DeadlockException e) {
+            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
+        }
     }
 
     // TECHNICAL/TESTING INTERFACE

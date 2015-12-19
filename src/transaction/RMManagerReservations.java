@@ -10,10 +10,14 @@ import transaction.bean.ReservationKey;
 
 import java.rmi.RemoteException;
 
-public class RMManagerReservations {
+public class RMManagerReservations extends ResourceManagerImpl<ReservationKey> {
+    public RMManagerReservations() throws RemoteException {
+        super(Host.HostName.RMReservations);
+    }
+
     public static void main(String[] args) {
         try {
-            new ResourceManagerImpl<ReservationKey>(Host.HostName.RMReservations).start();
+            new RMManagerReservations().start();
         } catch (RemoteException e) {
             e.printStackTrace();
         }

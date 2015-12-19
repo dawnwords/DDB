@@ -15,16 +15,28 @@ import java.io.Serializable;
  *         Preferences - Java - Code Style - Code Templates
  */
 public class ReservationKey implements Serializable {
-    protected String custName;
+    private String custName;
 
-    protected ReservationType resvType;
+    private ReservationType resvType;
 
-    protected String resvKey;
+    private String resvKey;
 
     public ReservationKey(String custName, ReservationType resvType, String resvKey) {
         this.custName = custName;
         this.resvKey = resvKey;
         this.resvType = resvType;
+    }
+
+    public String custName() {
+        return custName;
+    }
+
+    public ReservationType resvType() {
+        return resvType;
+    }
+
+    public String resvKey() {
+        return resvKey;
     }
 
     public boolean equals(Object o) {

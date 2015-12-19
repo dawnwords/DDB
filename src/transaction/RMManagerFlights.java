@@ -8,10 +8,14 @@ package transaction;
 
 import java.rmi.RemoteException;
 
-public class RMManagerFlights {
+public class RMManagerFlights extends ResourceManagerImpl<String> {
+    public RMManagerFlights() throws RemoteException {
+        super(Host.HostName.RMFlights);
+    }
+
     public static void main(String[] args) {
         try {
-            new ResourceManagerImpl<Integer>(Host.HostName.RMFlights).start();
+            new RMManagerFlights().start();
         } catch (RemoteException e) {
             e.printStackTrace();
         }

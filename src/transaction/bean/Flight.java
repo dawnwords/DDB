@@ -5,28 +5,28 @@ package transaction.bean;
  */
 public class Flight extends ResourceItem<String> {
 
-    private int flightNum;
-    private double price;
-    private int numRooms;
+    private String flightNum;
+    private int price;
+    private int numSeats;
     private int numAvail;
 
-    public Flight(int flightNum, double price, int numRooms, int numAvail) {
+    public Flight(String flightNum, int price, int numSeats, int numAvail) {
         this.flightNum = flightNum;
         this.price = price;
-        this.numRooms = numRooms;
+        this.numSeats = numSeats;
         this.numAvail = numAvail;
     }
 
-    public int flightNum() {
+    public String flightNum() {
         return flightNum;
     }
 
-    public double price() {
+    public int price() {
         return price;
     }
 
-    public int numRooms() {
-        return numRooms;
+    public int numSeats() {
+        return numSeats;
     }
 
     public int numAvail() {
@@ -35,22 +35,22 @@ public class Flight extends ResourceItem<String> {
 
     @Override
     public String[] getColumnNames() {
-        return new String[]{"flightNum", "price", "numRooms", "numAvail"};
+        return new String[]{"flightNum", "price", "numSeats", "numAvail"};
     }
 
     @Override
     public String[] getColumnValues() {
-        return new String[]{String.valueOf(flightNum), String.valueOf(price), String.valueOf(numRooms), String.valueOf(numAvail)};
+        return new String[]{flightNum, String.valueOf(price), String.valueOf(numSeats), String.valueOf(numAvail)};
     }
 
     @Override
     public String getKey() {
-        return String.valueOf(flightNum);
+        return flightNum;
     }
 
     @Override
     public ResourceItem<String> clone() {
-        Flight flight = new Flight(flightNum, price, numRooms, numAvail);
+        Flight flight = new Flight(flightNum, price, numSeats, numAvail);
         flight.isDeleted = isDeleted;
         return flight;
     }

@@ -6,13 +6,13 @@ package transaction.bean;
 public class Hotel extends ResourceItem<String> {
     private String location;
     private int price;
-    private int numCars;
+    private int numRooms;
     private int numAvail;
 
-    public Hotel(String location, int price, int numCars, int numAvail) {
+    public Hotel(String location, int price, int numRooms, int numAvail) {
         this.location = location;
         this.price = price;
-        this.numCars = numCars;
+        this.numRooms = numRooms;
         this.numAvail = numAvail;
     }
 
@@ -24,8 +24,8 @@ public class Hotel extends ResourceItem<String> {
         return price;
     }
 
-    public int numCars() {
-        return numCars;
+    public int numRooms() {
+        return numRooms;
     }
 
     public int numAvail() {
@@ -34,12 +34,12 @@ public class Hotel extends ResourceItem<String> {
 
     @Override
     public String[] getColumnNames() {
-        return new String[]{"location", "price", "numCars", "numAvail"};
+        return new String[]{"location", "price", "numSeats", "numAvail"};
     }
 
     @Override
     public String[] getColumnValues() {
-        return new String[]{location, String.valueOf(price), String.valueOf(numCars), String.valueOf(numAvail)};
+        return new String[]{location, String.valueOf(price), String.valueOf(numRooms), String.valueOf(numAvail)};
     }
 
     @Override
@@ -49,7 +49,7 @@ public class Hotel extends ResourceItem<String> {
 
     @Override
     public ResourceItem<String> clone() {
-        Hotel hotel = new Hotel(location, price, numCars, numAvail);
+        Hotel hotel = new Hotel(location, price, numRooms, numAvail);
         hotel.isDeleted = isDeleted;
         return hotel;
     }

@@ -6,10 +6,10 @@ package transaction.bean;
 public class Car extends ResourceItem<String> {
 
     private String location;
-    private double price;
+    private int price;
     private int numCars, numAvail;
 
-    public Car(String location, double price, int numCars, int numAvail) {
+    public Car(String location, int price, int numCars, int numAvail) {
         this.location = location;
         this.price = price;
         this.numCars = numCars;
@@ -40,7 +40,7 @@ public class Car extends ResourceItem<String> {
         return location;
     }
 
-    public double price() {
+    public int price() {
         return price;
     }
 

@@ -31,6 +31,6 @@ public abstract class Host extends UnicastRemoteObject {
     public abstract boolean reconnect() throws RemoteException;
 
     public enum HostName {
-        RMFlights, RMRooms, RMCars, RMReservations, TM, WC, ALL
+        RMFlights, RMRooms, RMCars, RMReservations, RMCustomers, TM, WC, ALL
     }
 }

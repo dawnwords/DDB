@@ -55,11 +55,6 @@ public interface WorkflowController extends Remote {
      */
     boolean commit(int xid) throws RemoteException, TransactionAbortedException, InvalidTransactionException;
 
-
-    //////////
-    // ADMINISTRATIVE INTERFACE
-    //////////
-
     /**
      * Abort transaction.
      *
@@ -68,6 +63,11 @@ public interface WorkflowController extends Remote {
      * @throws InvalidTransactionException if transaction id is invalid.
      */
     void abort(int xid) throws RemoteException, InvalidTransactionException;
+
+
+    //////////
+    // ADMINISTRATIVE INTERFACE
+    //////////
 
     /**
      * Add seats to a flight.  In general this will be used to create
@@ -104,7 +104,7 @@ public interface WorkflowController extends Remote {
      * This should look a lot like addFlight, only keyed on a location
      * instead of a flight number.
      *
-     * @return true on success, false on failure. (location==null; numRooms<0...)
+     * @return true on success, false on failure. (location==null; numSeats<0...)
      * @throws RemoteException             on communications failure.
      * @throws TransactionAbortedException if transaction was aborted.
      * @throws InvalidTransactionException if transaction id is invalid.
@@ -118,7 +118,7 @@ public interface WorkflowController extends Remote {
      * (rooms not allocated to a customer).  It should fail if it
      * would make the count of available rooms negative.
      *
-     * @return true on success, false on failure. (location doesn't exist; numRooms<0; not enough available rooms...)
+     * @return true on success, false on failure. (location doesn't exist; numSeats<0; not enough available rooms...)
      * @throws RemoteException             on communications failure.
      * @throws TransactionAbortedException if transaction was aborted.
      * @throws InvalidTransactionException if transaction id is invalid.
@@ -154,7 +154,7 @@ public interface WorkflowController extends Remote {
 
     /**
      * Add a new customer to database.  Should return success if
-     * customer already exists.
+     * customer does not exist yet.
      *
      * @param xid      id of transaction.
      * @param custName name of customer.
@@ -220,12 +220,12 @@ public interface WorkflowController extends Remote {
     int queryCarsPrice(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException;
 
 
+    /* Return the total price of all reservations held for a customer. Return -1 if custName==null or doesn't exist.*/
+    int queryCustomerBill(int xid, String custName) throws RemoteException, TransactionAbortedException, InvalidTransactionException;
+
     //////////
     // RESERVATION INTERFACE
     //////////
-
-    /* Return the total price of all reservations held for a customer. Return -1 if custName==null or doesn't exist.*/
-    int queryCustomerBill(int xid, String custName) throws RemoteException, TransactionAbortedException, InvalidTransactionException;
 
     /**
      * Reserve a flight on behalf of this customer.

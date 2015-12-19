@@ -29,7 +29,7 @@ public abstract class ResourceItem<Key> implements Cloneable, Serializable {
 
     protected abstract Object indexValue();
 
-    public final Object getIndex(String indexName) throws InvalidIndexException {
+    public final Object getIndex(String indexName) {
         if (getColumnNames()[0].equals(indexName)) {
             return indexValue();
         } else {
