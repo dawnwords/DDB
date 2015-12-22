@@ -1,6 +1,7 @@
 package transaction;
 
 import transaction.exception.InvalidTransactionException;
+import util.IOUtil;
 
 import java.rmi.Naming;
 import java.rmi.RMISecurityManager;
@@ -9,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Transaction Manager for the Distributed Travel Reservation System.
@@ -18,13 +20,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class TransactionManagerImpl extends Host implements TransactionManager {
 
+    public static final String TM_LOG_FILE_NAME = "tm.log";
     private ConcurrentHashMap<Long, List<ResourceManager>> xidRMMap;
     private ConcurrentHashMap<Long, StateCounter> xidStateMap;
+    private ReentrantReadWriteLock logLock;
 
     protected TransactionManagerImpl() throws RemoteException {
         super(HostName.TM);
-        xidRMMap = new ConcurrentHashMap<Long, List<ResourceManager>>();
-        xidStateMap = new ConcurrentHashMap<Long, StateCounter>();
+        logLock = new ReentrantReadWriteLock();
+        recover();
     }
 
     public static void main(String args[]) {
@@ -46,6 +50,30 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
         }
     }
 
+    private void recover() {
+        xidStateMap = loadLog();
+        if (xidStateMap == null) {
+            xidStateMap = new ConcurrentHashMap<Long, StateCounter>();
+        }
+        xidRMMap = new ConcurrentHashMap<Long, List<ResourceManager>>();
+        for (Long xid : xidStateMap.keySet()) {
+            xidRMMap.put(xid, new ArrayList<ResourceManager>());
+        }
+    }
+
+    private ConcurrentHashMap<Long, StateCounter> loadLog() {
+        logLock.readLock().lock();
+        ConcurrentHashMap<Long, StateCounter> result = IOUtil.readObject(TM_LOG_FILE_NAME);
+        logLock.readLock().unlock();
+        return result;
+    }
+
+    private void storeLog() {
+        logLock.writeLock().lock();
+        IOUtil.writeObject(TM_LOG_FILE_NAME, xidStateMap);
+        logLock.writeLock().unlock();
+    }
+
     @Override
     public boolean reconnect() throws RemoteException {
         return true;
@@ -53,7 +81,7 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
 
     @Override
     public boolean start(long xid) throws RemoteException {
-        if (xidRMMap.get(xid) != null) {
+        if (xidStateMap.get(xid) != null) {
             return false;
         }
         xidRMMap.put(xid, new ArrayList<ResourceManager>());
@@ -88,7 +116,7 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
         try {
             for (ResourceManager resourceManager : rmList) {
                 if (resourceManager.prepare(xid)) {
-                    if (state.increaseAndCheck()) {
+                    if (state.increaseAndCheck(rmList.size())) {
                         state.state(State.Commit);
                         return true;
                     }
@@ -114,7 +142,7 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
         for (ResourceManager resourceManager : rmList) {
             try {
                 resourceManager.commit(xid);
-                if (state.increaseAndCheck()) {
+                if (state.increaseAndCheck(rmList.size())) {
                     state.state(State.Finish);
                     return true;
                 }
@@ -139,7 +167,7 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
         for (ResourceManager resourceManager : rmList) {
             try {
                 resourceManager.abort(xid);
-                if (state.increaseAndCheck()) {
+                if (state.increaseAndCheck(rmList.size())) {
                     state.state(State.Finish);
                     return true;
                 }
@@ -150,7 +178,15 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
     }
 
     public void enlist(long xid, ResourceManager rm) throws RemoteException {
-
+        List<ResourceManager> rms = xidRMMap.get(xid);
+        StateCounter state = xidStateMap.get(xid);
+        if (rms == null || state == null) {
+            throw new InvalidTransactionException(xid, "enlist no such xid:" + xid);
+        }
+        if (state.state != State.Start) {
+            throw new InvalidTransactionException(xid, xid + " not started");
+        }
+        rms.add(rm);
     }
 
     private enum State {
@@ -166,15 +202,15 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
             count = new AtomicInteger(0);
         }
 
-        boolean increaseAndCheck() {
-            boolean result = count.incrementAndGet() >= 4;
-            //TODO write log
+        boolean increaseAndCheck(int limit) {
+            boolean result = count.incrementAndGet() >= limit;
+            storeLog();
             return result;
         }
 
         void state(State state) {
             this.state = state;
-            //TODO write log
+            storeLog();
         }
 
         @Override
