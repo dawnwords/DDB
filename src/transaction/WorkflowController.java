@@ -3,7 +3,6 @@ package transaction;
 import transaction.exception.InvalidTransactionException;
 import transaction.exception.TransactionAbortedException;
 
-import java.rmi.Remote;
 import java.rmi.RemoteException;
 
 /**

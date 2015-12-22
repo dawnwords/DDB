@@ -4,7 +4,6 @@ import lockmgr.DeadlockException;
 import transaction.bean.ResourceItem;
 import transaction.exception.InvalidIndexException;
 
-import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.util.List;
 import java.util.Set;
