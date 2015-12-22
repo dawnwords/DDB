@@ -33,6 +33,10 @@ public class Flight extends ResourceItem<String> {
         return numAvail;
     }
 
+    public void decreaseAvail() {
+        numAvail--;
+    }
+
     @Override
     public String[] getColumnNames() {
         return new String[]{"flightNum", "price", "numSeats", "numAvail"};

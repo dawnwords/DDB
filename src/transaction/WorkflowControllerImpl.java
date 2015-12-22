@@ -4,7 +4,6 @@ import lockmgr.DeadlockException;
 import transaction.bean.*;
 import transaction.exception.TransactionAbortedException;
 
-import java.rmi.Naming;
 import java.rmi.RemoteException;
 import java.util.Hashtable;
 import java.util.List;
@@ -62,17 +61,23 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
 
 
     // ADMINISTRATIVE INTERFACE
-    @Override
-    public boolean addFlight(long xid, String flightNum, int numSeats, int price) throws RemoteException, TransactionAbortedException {
-        if (flightNum == null || numSeats < 0 || price < 0) {
+
+    private <T extends ResourceItem<String>> boolean add(long xid, String key, int num, int price, Class<T> clazz, HostName who) throws RemoteException, TransactionAbortedException {
+        if (key == null || num < 0 || price < 0) {
             return false;
         }
-        RMManagerFlights flightRM = (RMManagerFlights) daemon.rm(HostName.RMFlights);
+        ResourceManager rm = daemon.rm(who);
         try {
-            if (flightRM.query(xid, flightNum) != null) {
+            if (rm.query(xid, key) != null) {
                 return false;
             }
-            flightRM.insert(xid, new Flight(flightNum, price, numSeats, numSeats));
+            T newItem;
+            try {
+                newItem = clazz.getConstructor(String.class, int.class, int.class, int.class).newInstance(key, price, num, num);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+            rm.insert(xid, newItem);
             return true;
         } catch (DeadlockException e) {
             throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
@@ -80,14 +85,20 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     }
 
     @Override
+    public boolean addFlight(long xid, String flightNum, int numSeats, int price) throws RemoteException, TransactionAbortedException {
+        return add(xid, flightNum, numSeats, price, Flight.class, HostName.RMFlights);
+    }
+
+    @Override
     public boolean deleteFlight(long xid, String flightNum) throws RemoteException, TransactionAbortedException {
         if (flightNum == null) {
             return false;
         }
-        RMManagerFlights flightRM = (RMManagerFlights) daemon.rm(HostName.RMFlights);
-        RMManagerReservations reservationRM = (RMManagerReservations) daemon.rm(HostName.RMReservations);
+        ResourceManager flightRM = daemon.rm(HostName.RMFlights);
+        ResourceManager reservationRM = daemon.rm(HostName.RMReservations);
         try {
-            for (ResourceItem<ReservationKey> reservation : reservationRM.query(xid)) {
+            List<ResourceItem<ReservationKey>> reservations = reservationRM.query(xid);
+            for (ResourceItem<ReservationKey> reservation : reservations) {
                 ReservationKey key = reservation.getKey();
                 if (key != null && key.resvType() == ReservationType.FLIGHT && flightNum.equals(key.resvKey())) {
                     return false;
@@ -101,19 +112,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
 
     @Override
     public boolean addRooms(long xid, String location, int numRooms, int price) throws RemoteException, TransactionAbortedException {
-        if (location == null || numRooms < 0 || price < 0) {
-            return false;
-        }
-        RMManagerHotels roomRM = (RMManagerHotels) daemon.rm(HostName.RMRooms);
-        try {
-            if (roomRM.query(xid, location) != null) {
-                return false;
-            }
-            roomRM.insert(xid, new Hotel(location, price, numRooms, numRooms));
-            return true;
-        } catch (DeadlockException e) {
-            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
-        }
+        return add(xid, location, numRooms, price, Hotel.class, HostName.RMRooms);
     }
 
     @Override
@@ -121,7 +120,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         if (location == null || numRooms < 0) {
             return false;
         }
-        RMManagerHotels roomRM = (RMManagerHotels) daemon.rm(HostName.RMRooms);
+        ResourceManager roomRM = daemon.rm(HostName.RMRooms);
         try {
             Hotel hotel = (Hotel) roomRM.query(xid, location);
             return !(hotel == null || hotel.numAvail() < numRooms) &&
@@ -133,19 +132,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
 
     @Override
     public boolean addCars(long xid, String location, int numCars, int price) throws RemoteException, TransactionAbortedException {
-        if (location == null || numCars < 0 || price < 0) {
-            return false;
-        }
-        RMManagerCars carRM = (RMManagerCars) daemon.rm(HostName.RMCars);
-        try {
-            if (carRM.query(xid, location) != null) {
-                return false;
-            }
-            carRM.insert(xid, new Car(location, price, numCars, numCars));
-            return true;
-        } catch (DeadlockException e) {
-            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
-        }
+        return add(xid, location, numCars, price, Car.class, HostName.RMCars);
     }
 
     @Override
@@ -153,7 +140,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         if (location == null || numCars < 0) {
             return false;
         }
-        RMManagerCars carRM = (RMManagerCars) daemon.rm(HostName.RMCars);
+        ResourceManager carRM = daemon.rm(HostName.RMCars);
         try {
             Car car = (Car) carRM.query(xid, location);
             return !(car == null || car.numAvail() < numCars) &&
@@ -168,7 +155,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         if (custName == null) {
             return false;
         }
-        RMManagerCustomers customerRM = (RMManagerCustomers) daemon.rm(HostName.RMCustomers);
+        ResourceManager customerRM = daemon.rm(HostName.RMCustomers);
         try {
             return customerRM.query(xid, custName) == null && customerRM.insert(xid, new Customer(custName));
         } catch (DeadlockException e) {
@@ -181,8 +168,8 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         if (custName == null) {
             return false;
         }
-        RMManagerCustomers customerRM = (RMManagerCustomers) daemon.rm(HostName.RMCustomers);
-        RMManagerReservations reservationRM = (RMManagerReservations) daemon.rm(HostName.RMReservations);
+        ResourceManager customerRM = daemon.rm(HostName.RMCustomers);
+        ResourceManager reservationRM = daemon.rm(HostName.RMReservations);
         try {
             return customerRM.query(xid, custName) != null &&
                     customerRM.delete(xid, custName) &&
@@ -193,76 +180,53 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     }
 
     // QUERY INTERFACE
+
+    private <T> T get(long xid, String key, Class<? extends T> clazz, HostName who) throws RemoteException, TransactionAbortedException {
+        if (key == null) {
+            return null;
+        }
+        ResourceManager rm = daemon.rm(who);
+        try {
+            return clazz.cast(rm.query(xid, key));
+        } catch (DeadlockException e) {
+            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
+        }
+    }
+
     @Override
     public int queryFlight(long xid, String flightNum) throws RemoteException, TransactionAbortedException {
-        Flight flight = getFlight(xid, flightNum);
+        Flight flight = get(xid, flightNum, Flight.class, HostName.RMFlights);
         return flight == null ? -1 : flight.numAvail();
     }
 
     @Override
     public int queryFlightPrice(long xid, String flightNum) throws RemoteException, TransactionAbortedException {
-        Flight flight = getFlight(xid, flightNum);
+        Flight flight = get(xid, flightNum, Flight.class, HostName.RMFlights);
         return flight == null ? -1 : flight.price();
-    }
-
-    private Flight getFlight(long xid, String flightNum) throws RemoteException, TransactionAbortedException {
-        if (flightNum == null) {
-            return null;
-        }
-        RMManagerFlights flightsRM = (RMManagerFlights) daemon.rm(HostName.RMFlights);
-        try {
-            return (Flight) flightsRM.query(xid, flightNum);
-        } catch (DeadlockException e) {
-            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
-        }
     }
 
     @Override
     public int queryRooms(long xid, String location) throws RemoteException, TransactionAbortedException {
-        Hotel hotel = getRoom(xid, location);
+        Hotel hotel = get(xid, location, Hotel.class, HostName.RMRooms);
         return hotel == null ? -1 : hotel.numAvail();
     }
 
     @Override
     public int queryRoomsPrice(long xid, String location) throws RemoteException, TransactionAbortedException {
-        Hotel hotel = getRoom(xid, location);
+        Hotel hotel = get(xid, location, Hotel.class, HostName.RMRooms);
         return hotel == null ? -1 : hotel.price();
-    }
-
-    private Hotel getRoom(long xid, String location) throws RemoteException, TransactionAbortedException {
-        if (location == null) {
-            return null;
-        }
-        RMManagerHotels roomRM = (RMManagerHotels) daemon.rm(HostName.RMRooms);
-        try {
-            return (Hotel) roomRM.query(xid, location);
-        } catch (DeadlockException e) {
-            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
-        }
     }
 
     @Override
     public int queryCars(long xid, String location) throws RemoteException, TransactionAbortedException {
-        Car car = getCar(xid, location);
+        Car car = get(xid, location, Car.class, HostName.RMCars);
         return car == null ? -1 : car.numAvail();
     }
 
     @Override
     public int queryCarsPrice(long xid, String location) throws RemoteException, TransactionAbortedException {
-        Car car = getCar(xid, location);
+        Car car = get(xid, location, Car.class, HostName.RMCars);
         return car == null ? -1 : car.price();
-    }
-
-    private Car getCar(long xid, String location) throws RemoteException, TransactionAbortedException {
-        if (location == null) {
-            return null;
-        }
-        RMManagerCars carRM = (RMManagerCars) daemon.rm(HostName.RMCars);
-        try {
-            return (Car) carRM.query(xid, location);
-        } catch (DeadlockException e) {
-            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
-        }
     }
 
     @Override
@@ -270,10 +234,10 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         if (custName == null) {
             return -1;
         }
-        RMManagerReservations reservationRM = (RMManagerReservations) daemon.rm(HostName.RMReservations);
-        RMManagerCars carRM = (RMManagerCars) daemon.rm(HostName.RMCars);
-        RMManagerHotels hotelRM = (RMManagerHotels) daemon.rm(HostName.RMRooms);
-        RMManagerFlights flightRM = (RMManagerFlights) daemon.rm(HostName.RMFlights);
+        ResourceManager reservationRM = daemon.rm(HostName.RMReservations);
+        ResourceManager carRM = daemon.rm(HostName.RMCars);
+        ResourceManager hotelRM = daemon.rm(HostName.RMRooms);
+        ResourceManager flightRM = daemon.rm(HostName.RMFlights);
         try {
             List<ResourceItem<ReservationKey>> reservations = reservationRM.query(xid, "custName", custName);
             if (reservations == null || reservations.isEmpty()) {
@@ -305,64 +269,46 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
 
 
     // RESERVATION INTERFACE
-    @Override
-    public boolean reserveFlight(long xid, String custName, String flightNum) throws RemoteException, TransactionAbortedException {
-        if (custName == null || flightNum == null) {
+    private <T extends ResourceItem<String>> boolean reserve(long xid, String custName, String key, Class<T> clazz, ReservationType type, HostName who) throws RemoteException, TransactionAbortedException {
+        if (custName == null || key == null) {
             return false;
         }
-        RMManagerFlights flightRM = (RMManagerFlights) daemon.rm(HostName.RMFlights);
-        RMManagerCustomers customerRM = (RMManagerCustomers) daemon.rm(HostName.RMCustomers);
-        RMManagerReservations reservationRM = (RMManagerReservations) daemon.rm(HostName.RMReservations);
+        ResourceManager rm = daemon.rm(who);
+        ResourceManager customerRM = daemon.rm(HostName.RMCustomers);
+        ResourceManager reservationRM = daemon.rm(HostName.RMReservations);
         try {
-            Flight flight = (Flight) flightRM.query(xid, flightNum);
-            return !(flight == null ||
+            ResourceItem<String> oldItem = rm.query(xid, key);
+            if (oldItem == null ||
                     customerRM.query(xid, custName) == null ||
-                    reservationRM.query(xid, new ReservationKey(custName, ReservationType.FLIGHT, flightNum)) == null) &&
-                    reservationRM.insert(xid, new Reservation(custName, ReservationType.FLIGHT, flightNum)) &&
-                    flightRM.update(xid, flightNum, new Flight(flight.flightNum(), flight.price(), flight.numSeats(), flight.numAvail() - 1));
+                    reservationRM.query(xid, new ReservationKey(custName, type, key)) == null ||
+                    !reservationRM.insert(xid, new Reservation(custName, type, key))) {
+                return false;
+            }
+            ResourceItem<String> newItem = oldItem.clone();
+            try {
+                clazz.getMethod("decreaseAvail").invoke(newItem);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+            return rm.update(xid, key, newItem);
         } catch (DeadlockException e) {
             throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
         }
+    }
+
+    @Override
+    public boolean reserveFlight(long xid, String custName, String flightNum) throws RemoteException, TransactionAbortedException {
+        return reserve(xid, custName, flightNum, Flight.class, ReservationType.FLIGHT, HostName.RMFlights);
     }
 
     @Override
     public boolean reserveCar(long xid, String custName, String location) throws RemoteException, TransactionAbortedException {
-        if (custName == null || location == null) {
-            return false;
-        }
-        RMManagerCars carRM = (RMManagerCars) daemon.rm(HostName.RMCars);
-        RMManagerCustomers customerRM = (RMManagerCustomers) daemon.rm(HostName.RMCustomers);
-        RMManagerReservations reservationRM = (RMManagerReservations) daemon.rm(HostName.RMReservations);
-        try {
-            Car car = (Car) carRM.query(xid, location);
-            return !(car == null ||
-                    customerRM.query(xid, custName) == null ||
-                    reservationRM.query(xid, new ReservationKey(custName, ReservationType.CAR, location)) == null) &&
-                    reservationRM.insert(xid, new Reservation(custName, ReservationType.CAR, location)) &&
-                    carRM.update(xid, location, new Car(car.location(), car.price(), car.numCars(), car.numAvail() - 1));
-        } catch (DeadlockException e) {
-            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
-        }
+        return reserve(xid, custName, location, Car.class, ReservationType.CAR, HostName.RMCars);
     }
 
     @Override
     public boolean reserveRoom(long xid, String custName, String location) throws RemoteException, TransactionAbortedException {
-        if (custName == null || location == null) {
-            return false;
-        }
-        RMManagerHotels hotelRM = (RMManagerHotels) daemon.rm(HostName.RMRooms);
-        RMManagerCustomers customerRM = (RMManagerCustomers) daemon.rm(HostName.RMCustomers);
-        RMManagerReservations reservationRM = (RMManagerReservations) daemon.rm(HostName.RMReservations);
-        try {
-            Hotel hotel = (Hotel) hotelRM.query(xid, location);
-            return !(hotel == null ||
-                    customerRM.query(xid, custName) == null ||
-                    reservationRM.query(xid, new ReservationKey(custName, ReservationType.CAR, location)) == null) &&
-                    reservationRM.insert(xid, new Reservation(custName, ReservationType.CAR, location)) &&
-                    hotelRM.update(xid, location, new Hotel(hotel.location(), hotel.price(), hotel.numRooms(), hotel.numAvail() - 1));
-        } catch (DeadlockException e) {
-            throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
-        }
+        return reserve(xid, custName, location, Hotel.class, ReservationType.HOTEL, HostName.RMRooms);
     }
 
     // TECHNICAL/TESTING INTERFACE
@@ -405,17 +351,10 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     }
 
     private class RMTMDaemon extends Thread {
-        private Hashtable<HostName, Host> hostMap;
-        private String rmiPort;
+        private Hashtable<HostName, Remote> hostMap;
 
         public RMTMDaemon() {
-            hostMap = new Hashtable<HostName, Host>();
-            rmiPort = getConfig("rmiPort");
-            if (rmiPort == null) {
-                rmiPort = "";
-            } else if (!rmiPort.equals("")) {
-                rmiPort = "//:" + rmiPort + "/";
-            }
+            hostMap = new Hashtable<HostName, Remote>();
         }
 
         @Override
@@ -439,7 +378,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
             }
             try {
                 boolean result = true;
-                for (Host host : hostMap.values()) {
+                for (Remote host : hostMap.values()) {
                     result = result && host.reconnect();
                 }
                 return result;
@@ -450,7 +389,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         }
 
         boolean bind(HostName who) {
-            Host host = hostMap.get(who);
+            Remote host = hostMap.get(who);
             if (host != null) {
                 try {
                     host.ping();
@@ -460,7 +399,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
             }
 
             try {
-                hostMap.put(who, (Host) Naming.lookup(rmiPort + who.name()));
+                hostMap.put(who, (Remote) lookUp(who));
                 System.out.println("WC bound to " + who.name());
                 return true;
             } catch (Exception e) {
@@ -473,19 +412,19 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         boolean dieNow(HostName name) {
             if (name == HostName.ALL) {
                 boolean result = true;
-                for (Host host : hostMap.values()) {
+                for (Remote host : hostMap.values()) {
                     result = result && dieNow(host);
                 }
                 return result;
             }
-            Host host = hostMap.get(name);
+            Remote host = hostMap.get(name);
             if (host == null) {
                 throw new IllegalArgumentException("no such host:" + name);
             }
             return dieNow(host);
         }
 
-        boolean dieNow(Host host) {
+        boolean dieNow(Remote host) {
             try {
                 host.dieNow();
             } catch (RemoteException e) {
@@ -513,8 +452,8 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
             return true;
         }
 
-        ResourceManager rm(HostName who) {
-            return (ResourceManager) hostMap.get(who);
+        <K> ResourceManager<K> rm(HostName who) {
+            return (ResourceManager<K>) hostMap.get(who);
         }
     }
 }

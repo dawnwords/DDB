@@ -52,6 +52,10 @@ public class Car extends ResourceItem<String> {
         return numAvail;
     }
 
+    public void decreaseAvail() {
+        numAvail--;
+    }
+
     @Override
     public Car clone() {
         Car car = new Car(location, price, numCars, numAvail);

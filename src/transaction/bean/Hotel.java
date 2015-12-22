@@ -32,6 +32,10 @@ public class Hotel extends ResourceItem<String> {
         return numAvail;
     }
 
+    public void decreaseAvail() {
+        numAvail--;
+    }
+
     @Override
     public String[] getColumnNames() {
         return new String[]{"location", "price", "numSeats", "numAvail"};
