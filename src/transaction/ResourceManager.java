@@ -3,7 +3,6 @@ package transaction;
 import lockmgr.DeadlockException;
 import transaction.bean.ResourceItem;
 import transaction.exception.InvalidIndexException;
-import transaction.exception.InvalidTransactionException;
 
 import java.rmi.Remote;
 import java.rmi.RemoteException;
@@ -28,25 +27,25 @@ public interface ResourceManager<K> extends Remote {
 
     String getID() throws RemoteException;
 
-    List<ResourceItem<K>> query(long xid) throws DeadlockException, InvalidTransactionException, RemoteException;
+    List<ResourceItem<K>> query(long xid) throws DeadlockException, RemoteException;
 
-    ResourceItem<K> query(long xid, K key) throws DeadlockException, InvalidTransactionException, RemoteException;
+    ResourceItem<K> query(long xid, K key) throws DeadlockException, RemoteException;
 
-    List<ResourceItem<K>> query(long xid, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, InvalidIndexException, RemoteException;
+    List<ResourceItem<K>> query(long xid, String indexName, Object indexVal) throws DeadlockException, InvalidIndexException, RemoteException;
 
-    boolean update(long xid, K key, ResourceItem<K> newItem) throws DeadlockException, InvalidTransactionException, RemoteException;
+    boolean update(long xid, K key, ResourceItem<K> newItem) throws DeadlockException, RemoteException;
 
-    boolean insert(long xid, ResourceItem<K> newItem) throws DeadlockException, InvalidTransactionException, RemoteException;
+    boolean insert(long xid, ResourceItem<K> newItem) throws DeadlockException, RemoteException;
 
-    boolean delete(long xid, K key) throws DeadlockException, InvalidTransactionException, RemoteException;
+    boolean delete(long xid, K key) throws DeadlockException, RemoteException;
 
-    int delete(long xid, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, InvalidIndexException, RemoteException;
+    int delete(long xid, String indexName, Object indexVal) throws DeadlockException, InvalidIndexException, RemoteException;
 
-    boolean prepare(long xid) throws InvalidTransactionException, RemoteException;
+    boolean prepare(long xid) throws RemoteException;
 
-    void commit(long xid) throws InvalidTransactionException, RemoteException;
+    void commit(long xid) throws RemoteException;
 
-    void abort(long xid) throws InvalidTransactionException, RemoteException;
+    void abort(long xid) throws RemoteException;
 
     void ping() throws RemoteException;
 

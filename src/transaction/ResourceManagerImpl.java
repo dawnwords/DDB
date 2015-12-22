@@ -182,7 +182,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     @Override
-    public List<ResourceItem<K>> query(long xid) throws DeadlockException, InvalidTransactionException, RemoteException {
+    public List<ResourceItem<K>> query(long xid) throws DeadlockException, RemoteException {
         try {
             return query(xid, null, null);
         } catch (InvalidIndexException ignored) {
@@ -191,7 +191,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     @Override
-    public ResourceItem<K> query(long xid, K key) throws DeadlockException, InvalidTransactionException, RemoteException {
+    public ResourceItem<K> query(long xid, K key) throws DeadlockException, RemoteException {
         addXid(xid);
 
         RMTable<K> table = getTable(xid, myRMIName.name());
@@ -207,7 +207,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     @Override
-    public List<ResourceItem<K>> query(long xid, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, InvalidIndexException, RemoteException {
+    public List<ResourceItem<K>> query(long xid, String indexName, Object indexVal) throws DeadlockException, InvalidIndexException, RemoteException {
         addXid(xid);
 
         List<ResourceItem<K>> result = new ArrayList<ResourceItem<K>>();
@@ -233,7 +233,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     @Override
-    public boolean update(long xid, K key, ResourceItem<K> newItem) throws DeadlockException, InvalidTransactionException, RemoteException {
+    public boolean update(long xid, K key, ResourceItem<K> newItem) throws DeadlockException, RemoteException {
         if (!key.equals(newItem.getKey()))
             throw new IllegalArgumentException();
 
@@ -253,7 +253,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     @Override
-    public boolean insert(long xid, ResourceItem<K> newItem) throws DeadlockException, InvalidTransactionException, RemoteException {
+    public boolean insert(long xid, ResourceItem<K> newItem) throws DeadlockException, RemoteException {
         addXid(xid);
 
         RMTable<K> table = getTable(xid, myRMIName.name());
@@ -270,7 +270,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     @Override
-    public boolean delete(long xid, K key) throws DeadlockException, InvalidTransactionException, RemoteException {
+    public boolean delete(long xid, K key) throws DeadlockException, RemoteException {
         addXid(xid);
 
         RMTable<K> table = getTable(xid, myRMIName.name());
@@ -289,7 +289,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     @Override
-    public int delete(long xid, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, RemoteException {
+    public int delete(long xid, String indexName, Object indexVal) throws DeadlockException, RemoteException {
         addXid(xid);
 
         int n = 0;
@@ -314,7 +314,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         return n;
     }
 
-    private void addXid(long xid) throws RemoteException, InvalidTransactionException {
+    private void addXid(long xid) throws RemoteException {
         if (xid < 0) {
             throw new InvalidTransactionException(xid, "Xid must be positive.");
         }
@@ -335,7 +335,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     @Override
-    public boolean prepare(long xid) throws InvalidTransactionException, RemoteException {
+    public boolean prepare(long xid) throws RemoteException {
         if (dieTime == DieTime.BEFORE_PREPARE) {
             dieNow();
         }
@@ -351,7 +351,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     @Override
-    public void commit(long xid) throws InvalidTransactionException, RemoteException {
+    public void commit(long xid) throws RemoteException {
         if (dieTime == DieTime.BEFORE_COMMIT) {
             dieNow();
         }
@@ -359,14 +359,14 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     @Override
-    public void abort(long xid) throws InvalidTransactionException, RemoteException {
+    public void abort(long xid) throws RemoteException {
         if (dieTime == DieTime.BEFORE_ABORT) {
             dieNow();
         }
         end(xid, false);
     }
 
-    private void end(long xid, boolean commit) throws InvalidTransactionException, RemoteException {
+    private void end(long xid, boolean commit) throws RemoteException {
         if (xid < 0) {
             throw new InvalidTransactionException(xid, "Xid must be positive.");
         }
