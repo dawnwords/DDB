@@ -5,7 +5,6 @@ import transaction.bean.*;
 import transaction.exception.TransactionAbortedException;
 
 import java.rmi.Naming;
-import java.rmi.RMISecurityManager;
 import java.rmi.RemoteException;
 import java.util.Hashtable;
 import java.util.List;
@@ -28,29 +27,20 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     public WorkflowControllerImpl() throws RemoteException {
         super(HostName.WC);
         xidCounter = new AtomicLong(System.currentTimeMillis());
-
         daemon = new RMTMDaemon();
-        daemon.start();
     }
 
     public static void main(String args[]) {
-        System.setSecurityManager(new RMISecurityManager());
-
-        String rmiPort = System.getProperty("rmiPort");
-        if (rmiPort == null) {
-            rmiPort = "";
-        } else if (!rmiPort.equals("")) {
-            rmiPort = "//:" + rmiPort + "/";
-        }
-
         try {
-            WorkflowControllerImpl obj = new WorkflowControllerImpl();
-            Naming.rebind(rmiPort + HostName.WC, obj);
-            System.out.println("WC bound");
+            new WorkflowControllerImpl().startUp();
         } catch (Exception e) {
-            System.err.println("WC not bound:" + e);
-            System.exit(1);
+            e.printStackTrace();
         }
+    }
+
+    public void startUp() {
+        daemon.start();
+        bindRMIRegistry();
     }
 
     // TRANSACTION INTERFACE
@@ -420,7 +410,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
 
         public RMTMDaemon() {
             hostMap = new Hashtable<HostName, Host>();
-            rmiPort = System.getProperty("rmiPort");
+            rmiPort = getConfig("rmiPort");
             if (rmiPort == null) {
                 rmiPort = "";
             } else if (!rmiPort.equals("")) {

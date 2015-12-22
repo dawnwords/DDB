@@ -3,8 +3,6 @@ package transaction;
 import transaction.exception.InvalidTransactionException;
 import util.IOUtil;
 
-import java.rmi.Naming;
-import java.rmi.RMISecurityManager;
 import java.rmi.RemoteException;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,26 +26,19 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
     protected TransactionManagerImpl() throws RemoteException {
         super(HostName.TM);
         logLock = new ReentrantReadWriteLock();
-        recover();
     }
 
     public static void main(String args[]) {
-        System.setSecurityManager(new RMISecurityManager());
-
-        String rmiPort = System.getProperty("rmiPort");
-        if (rmiPort == null) {
-            rmiPort = "";
-        } else if (!rmiPort.equals("")) {
-            rmiPort = "//:" + rmiPort + "/";
-        }
-
         try {
-            TransactionManagerImpl obj = new TransactionManagerImpl();
-            Naming.rebind(rmiPort + Host.HostName.TM, obj);
-            System.out.println("TM bound");
-        } catch (Exception e) {
-            System.err.println("TM not bound:" + e);
+            new TransactionManagerImpl().start();
+        } catch (RemoteException e) {
+            e.printStackTrace();
         }
+    }
+
+    public void start() {
+        recover();
+        bindRMIRegistry();
     }
 
     private void recover() {

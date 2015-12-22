@@ -10,11 +10,7 @@ import transaction.exception.TransactionManagerUnaccessibleException;
 import util.IOUtil;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.rmi.Naming;
 import java.rmi.RemoteException;
-import java.rmi.registry.LocateRegistry;
-import java.rmi.registry.Registry;
 import java.util.*;
 
 /**
@@ -39,9 +35,6 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     public void start() {
-        if (myRMIName == null) {
-            throw new IllegalStateException("No RMI name given");
-        }
         recover();
         tmDaemon.start();
         bindRMIRegistry();
@@ -85,17 +78,6 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
                     }
                 }
             }
-        }
-    }
-
-    private void bindRMIRegistry() {
-        String rmiPort = getProperty("rm." + myRMIName + ".port");
-        try {
-            Registry rmiRegistry = LocateRegistry.createRegistry(Integer.parseInt(rmiPort));
-            rmiRegistry.bind(myRMIName.name(), this);
-            System.out.println(myRMIName + " bound");
-        } catch (Exception e) {
-            throw new RuntimeException(myRMIName + " not bound:" + e);
         }
     }
 
@@ -408,16 +390,6 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         }
     }
 
-    private String getProperty(String key) {
-        Properties prop = new Properties();
-        try {
-            prop.load(new FileInputStream("conf/ddb.conf"));
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        return prop.getProperty(key);
-    }
-
     private class TMDaemon extends Thread {
 
         TransactionManager tm;
@@ -450,22 +422,13 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
             if (tm == null) {
                 System.out.println("reconnect tm failed!");
                 throw new TransactionManagerUnaccessibleException();
-            } else {
-                System.out.println("reconnect tm succeeded!");
             }
             return tm;
         }
 
         boolean reconnect() {
-            String rmiPort = getProperty("tm.port");
-            if (rmiPort == null) {
-                rmiPort = "";
-            } else if (!rmiPort.equals("")) {
-                rmiPort = "//:" + rmiPort + "/";
-            }
-
             try {
-                tm = (TransactionManager) Naming.lookup(rmiPort + HostName.TM);
+                tm = (TransactionManager) lookUp(HostName.TM);
                 System.out.println(myRMIName + "'s xids is Empty ? " + xids.isEmpty());
                 for (Long xid : xids) {
                     System.out.println(myRMIName + " Re-enlist to TM with xid" + xid);
