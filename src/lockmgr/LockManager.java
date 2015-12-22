@@ -13,13 +13,13 @@ import java.util.concurrent.ConcurrentMap;
 public class LockManager {
     public static final long DEADLOCK_TIMEOUT = 10 * 1000;
     private Map<String, LockEntry> keyLockEntryMap;
-    private ConcurrentMap<Integer, Queue<String>> tidKeyMap;
+    private ConcurrentMap<Long, Queue<String>> tidKeyMap;
     private MonitorThread monitorThread;
     private transient boolean stop;
 
     public LockManager() {
         this.keyLockEntryMap = Collections.synchronizedMap(new LinkedHashMap<String, LockEntry>());
-        this.tidKeyMap = new ConcurrentHashMap<Integer, Queue<String>>();
+        this.tidKeyMap = new ConcurrentHashMap<Long, Queue<String>>();
         this.monitorThread = new MonitorThread();
     }
 
@@ -33,7 +33,7 @@ public class LockManager {
         monitorThread.wake();
     }
 
-    public boolean lock(int tid, String dataKey, LockType lockType) throws DeadlockException {
+    public boolean lock(long tid, String dataKey, LockType lockType) throws DeadlockException {
         if (tid < 0 || dataKey == null) {
             throw new IllegalArgumentException("lock argument error");
         }
@@ -54,7 +54,7 @@ public class LockManager {
         return true;
     }
 
-    public boolean unlockAll(int tid) {
+    public boolean unlockAll(long tid) {
         if (tid < 0) {
             throw new IllegalArgumentException("unlock argument error");
         }
@@ -126,7 +126,7 @@ public class LockManager {
         }
 
         void handleLockTimeout(String key, LockEntry earliestLockEntry) {
-            int tid = earliestLockEntry.releaseCurrent();
+            long tid = earliestLockEntry.releaseCurrent();
             if (earliestLockEntry.shouldBeRecycled()) {
                 keyLockEntryMap.remove(key);
                 Queue<String> keys = tidKeyMap.get(tid);

@@ -6,7 +6,7 @@ package transaction.exception;
  * failure caused this operation to abort the transaction.
  */
 public class TransactionAbortedException extends Exception {
-    public TransactionAbortedException(int Xid, String msg) {
-        super("The transaction " + Xid + " aborted:" + msg);
+    public TransactionAbortedException(long xid, String msg) {
+        super("The transaction " + xid + " aborted:" + msg);
     }
 }

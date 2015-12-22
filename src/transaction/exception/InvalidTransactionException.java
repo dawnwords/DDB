@@ -7,7 +7,7 @@ package transaction.exception;
  * cannot be continued.
  */
 public class InvalidTransactionException extends Exception {
-    public InvalidTransactionException(int Xid, String msg) {
+    public InvalidTransactionException(long Xid, String msg) {
         super("The transaction " + Xid + " is invalid:" + msg);
     }
 }

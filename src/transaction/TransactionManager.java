@@ -13,13 +13,13 @@ import java.rmi.RemoteException;
 
 public interface TransactionManager extends Remote {
 
-    boolean start(int xid) throws RemoteException;
+    boolean start(long xid) throws RemoteException;
 
-    boolean commit(int xid) throws RemoteException;
+    boolean commit(long xid) throws RemoteException;
 
-    boolean abort(int xid) throws RemoteException;
+    boolean abort(long xid) throws RemoteException;
 
-    void enlist(int xid, ResourceManager rm) throws RemoteException;
+    void enlist(long xid, ResourceManager rm) throws RemoteException;
 
     void ping() throws RemoteException;
 

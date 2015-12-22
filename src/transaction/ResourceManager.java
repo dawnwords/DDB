@@ -22,31 +22,31 @@ public interface ResourceManager<K> extends Remote {
 
     Set getTransactions() throws RemoteException;
 
-    List<ResourceItem<K>> getUpdatedRows(int xid) throws RemoteException;
+    List<ResourceItem<K>> getUpdatedRows(long xid) throws RemoteException;
 
     List<ResourceItem<K>> getUpdatedRows() throws RemoteException;
 
     String getID() throws RemoteException;
 
-    List<ResourceItem<K>> query(int xid) throws DeadlockException, InvalidTransactionException, RemoteException;
+    List<ResourceItem<K>> query(long xid) throws DeadlockException, InvalidTransactionException, RemoteException;
 
-    ResourceItem<K> query(int xid, K key) throws DeadlockException, InvalidTransactionException, RemoteException;
+    ResourceItem<K> query(long xid, K key) throws DeadlockException, InvalidTransactionException, RemoteException;
 
-    List<ResourceItem<K>> query(int xid, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, InvalidIndexException, RemoteException;
+    List<ResourceItem<K>> query(long xid, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, InvalidIndexException, RemoteException;
 
-    boolean update(int xid, K key, ResourceItem<K> newItem) throws DeadlockException, InvalidTransactionException, RemoteException;
+    boolean update(long xid, K key, ResourceItem<K> newItem) throws DeadlockException, InvalidTransactionException, RemoteException;
 
-    boolean insert(int xid, ResourceItem<K> newItem) throws DeadlockException, InvalidTransactionException, RemoteException;
+    boolean insert(long xid, ResourceItem<K> newItem) throws DeadlockException, InvalidTransactionException, RemoteException;
 
-    boolean delete(int xid, K key) throws DeadlockException, InvalidTransactionException, RemoteException;
+    boolean delete(long xid, K key) throws DeadlockException, InvalidTransactionException, RemoteException;
 
-    int delete(int xid, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, InvalidIndexException, RemoteException;
+    int delete(long xid, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, InvalidIndexException, RemoteException;
 
-    boolean prepare(int xid) throws InvalidTransactionException, RemoteException;
+    boolean prepare(long xid) throws InvalidTransactionException, RemoteException;
 
-    void commit(int xid) throws InvalidTransactionException, RemoteException;
+    void commit(long xid) throws InvalidTransactionException, RemoteException;
 
-    void abort(int xid) throws InvalidTransactionException, RemoteException;
+    void abort(long xid) throws InvalidTransactionException, RemoteException;
 
     void ping() throws RemoteException;
 

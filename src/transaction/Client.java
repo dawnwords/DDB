@@ -27,7 +27,7 @@ public class Client {
 
         WorkflowController wc = null;
         try {
-            wc = (WorkflowController) Naming.lookup(rmiPort + WorkflowController.RMIName);
+            wc = (WorkflowController) Naming.lookup(rmiPort + Host.HostName.WC);
             System.out.println("Bound to WC");
         } catch (Exception e) {
             System.err.println("Cannot bind to WC:" + e);
@@ -35,7 +35,7 @@ public class Client {
         }
 
         try {
-            int xid = wc.start();
+            long xid = wc.start();
 
             if (!wc.addFlight(xid, "347", 230, 999)) {
                 System.err.println("Add flight failed");

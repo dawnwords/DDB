@@ -28,9 +28,9 @@ public class RMTable<K> implements Serializable {
 
     protected String tableName;
 
-    protected int xid;
+    protected long xid;
 
-    public RMTable(String tableName, RMTable<K> parent, int xid, LockManager lm) {
+    public RMTable(String tableName, RMTable<K> parent, long xid, LockManager lm) {
         this.xid = xid;
         this.tableName = tableName;
         this.parent = parent;

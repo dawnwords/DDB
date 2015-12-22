@@ -25,16 +25,16 @@ import java.util.*;
 
 public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     private final static String TRANSACTION_LOG_FILENAME = "transactions.log";
-    private HashSet<Integer> xids;
+    private HashSet<Long> xids;
     private LockManager lm;
-    private Hashtable<Integer, Hashtable<String, RMTable<K>>> tables;
+    private Hashtable<Long, Hashtable<String, RMTable<K>>> tables;
     private TMDaemon tmDaemon;
 
     public ResourceManagerImpl(HostName rmiName) throws RemoteException {
         super(rmiName);
-        xids = new HashSet<Integer>();
+        xids = new HashSet<Long>();
         lm = new LockManager();
-        tables = new Hashtable<Integer, Hashtable<String, RMTable<K>>>();
+        tables = new Hashtable<Long, Hashtable<String, RMTable<K>>>();
         tmDaemon = new TMDaemon();
     }
 
@@ -48,7 +48,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     public void recover() {
-        HashSet<Integer> tXids = loadTransactionLogs();
+        HashSet<Long> tXids = loadTransactionLogs();
         if (tXids != null) {
             xids = tXids;
         }
@@ -63,7 +63,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
             for (File dataFile : dataFiles) {
                 if (dataFile.isDirectory()) {
                     //xTable
-                    int xid = Integer.parseInt(dataFile.getName());
+                    long xid = Integer.parseInt(dataFile.getName());
                     if (!xids.contains(xid)) {
                         throw new IllegalStateException("RM Recover Error: unexpected xid " + xid);
                     }
@@ -105,7 +105,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     @Override
-    public List<ResourceItem<K>> getUpdatedRows(int xid) {
+    public List<ResourceItem<K>> getUpdatedRows(long xid) {
         RMTable<K> table = getTable(xid, myRMIName.name());
         return new ArrayList<ResourceItem<K>>(table.table.values());
     }
@@ -127,22 +127,18 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     public TransactionManager getTransactionManager() throws TransactionManagerUnaccessibleException {
-        TransactionManager tm = tmDaemon.get();
-        if (tm == null)
-            throw new TransactionManagerUnaccessibleException();
-        else
-            return tm;
+        return tmDaemon.get();
     }
 
-    private RMTable<K> loadTable(int xid, String tableName) {
+    private RMTable<K> loadTable(long xid, String tableName) {
         return IOUtil.readObject("data" + File.separator + (xid == -1 ? "" : xid + File.separator) + tableName);
     }
 
-    private boolean storeTable(int xid, String tableName, RMTable table) {
+    private boolean storeTable(long xid, String tableName, RMTable table) {
         return IOUtil.writeObject("data" + File.separator + xid, tableName, table);
     }
 
-    private RMTable<K> getTable(int xid, String tableName) {
+    private RMTable<K> getTable(long xid, String tableName) {
         Hashtable<String, RMTable<K>> xidTables;
         synchronized (tables) {
             xidTables = tables.get(xid);
@@ -177,16 +173,16 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         return getTable(-1, tableName);
     }
 
-    private HashSet<Integer> loadTransactionLogs() {
+    private HashSet<Long> loadTransactionLogs() {
         return IOUtil.readObject("data" + File.separator + "transactions.log");
     }
 
-    private boolean storeTransactionLogs(HashSet<Integer> xids) {
+    private boolean storeTransactionLogs(HashSet<Long> xids) {
         return IOUtil.writeObject("data", "transactions.log", xids);
     }
 
     @Override
-    public List<ResourceItem<K>> query(int xid) throws DeadlockException, InvalidTransactionException, RemoteException {
+    public List<ResourceItem<K>> query(long xid) throws DeadlockException, InvalidTransactionException, RemoteException {
         try {
             return query(xid, null, null);
         } catch (InvalidIndexException ignored) {
@@ -195,7 +191,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     @Override
-    public ResourceItem<K> query(int xid, K key) throws DeadlockException, InvalidTransactionException, RemoteException {
+    public ResourceItem<K> query(long xid, K key) throws DeadlockException, InvalidTransactionException, RemoteException {
         addXid(xid);
 
         RMTable<K> table = getTable(xid, myRMIName.name());
@@ -211,7 +207,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     @Override
-    public List<ResourceItem<K>> query(int xid, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, InvalidIndexException, RemoteException {
+    public List<ResourceItem<K>> query(long xid, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, InvalidIndexException, RemoteException {
         addXid(xid);
 
         List<ResourceItem<K>> result = new ArrayList<ResourceItem<K>>();
@@ -237,7 +233,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     @Override
-    public boolean update(int xid, K key, ResourceItem<K> newItem) throws DeadlockException, InvalidTransactionException, RemoteException {
+    public boolean update(long xid, K key, ResourceItem<K> newItem) throws DeadlockException, InvalidTransactionException, RemoteException {
         if (!key.equals(newItem.getKey()))
             throw new IllegalArgumentException();
 
@@ -257,7 +253,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     @Override
-    public boolean insert(int xid, ResourceItem<K> newItem) throws DeadlockException, InvalidTransactionException, RemoteException {
+    public boolean insert(long xid, ResourceItem<K> newItem) throws DeadlockException, InvalidTransactionException, RemoteException {
         addXid(xid);
 
         RMTable<K> table = getTable(xid, myRMIName.name());
@@ -274,7 +270,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     @Override
-    public boolean delete(int xid, K key) throws DeadlockException, InvalidTransactionException, RemoteException {
+    public boolean delete(long xid, K key) throws DeadlockException, InvalidTransactionException, RemoteException {
         addXid(xid);
 
         RMTable<K> table = getTable(xid, myRMIName.name());
@@ -293,7 +289,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     @Override
-    public int delete(int xid, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, RemoteException {
+    public int delete(long xid, String indexName, Object indexVal) throws DeadlockException, InvalidTransactionException, RemoteException {
         addXid(xid);
 
         int n = 0;
@@ -318,7 +314,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         return n;
     }
 
-    private void addXid(int xid) throws RemoteException, InvalidTransactionException {
+    private void addXid(long xid) throws RemoteException, InvalidTransactionException {
         if (xid < 0) {
             throw new InvalidTransactionException(xid, "Xid must be positive.");
         }
@@ -339,12 +335,15 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     @Override
-    public boolean prepare(int xid) throws InvalidTransactionException, RemoteException {
+    public boolean prepare(long xid) throws InvalidTransactionException, RemoteException {
         if (dieTime == DieTime.BEFORE_PREPARE) {
             dieNow();
         }
         if (xid < 0) {
             throw new InvalidTransactionException(xid, "Xid must be positive.");
+        }
+        if (xids.contains(xid)) {
+            throw new InvalidTransactionException(xid, "No Such Xid.");
         }
         if (dieTime == DieTime.AFTER_PREPARE)
             dieNow();
@@ -352,7 +351,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     @Override
-    public void commit(int xid) throws InvalidTransactionException, RemoteException {
+    public void commit(long xid) throws InvalidTransactionException, RemoteException {
         if (dieTime == DieTime.BEFORE_COMMIT) {
             dieNow();
         }
@@ -360,29 +359,30 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     @Override
-    public void abort(int xid) throws InvalidTransactionException, RemoteException {
+    public void abort(long xid) throws InvalidTransactionException, RemoteException {
         if (dieTime == DieTime.BEFORE_ABORT) {
             dieNow();
         }
         end(xid, false);
     }
 
-    private void end(int xid, boolean commit) throws InvalidTransactionException, RemoteException {
+    private void end(long xid, boolean commit) throws InvalidTransactionException, RemoteException {
         if (xid < 0) {
             throw new InvalidTransactionException(xid, "Xid must be positive.");
         }
         Hashtable<String, RMTable<K>> xidTables = tables.get(xid);
-        if (xidTables != null) {
-            synchronized (xidTables) {
-                for (String tableName : xidTables.keySet()) {
-                    if (commit) {
-                        commitXTable(xidTables.get(tableName));
-                    }
-                    new File("data/" + xid + "/" + tableName).delete();
+        if (xidTables == null) {
+            throw new InvalidTransactionException(xid, "No Such Xid.");
+        }
+        synchronized (xidTables) {
+            for (String tableName : xidTables.keySet()) {
+                if (commit) {
+                    commitXTable(xidTables.get(tableName));
                 }
-                new File("data/" + xid).delete();
-                tables.remove(xid);
+                new File("data/" + xid + "/" + tableName).delete();
             }
+            new File("data/" + xid).delete();
+            tables.remove(xid);
         }
         if (!lm.unlockAll(xid)) {
             throw new RuntimeException();
@@ -426,16 +426,8 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         public void run() {
             while (!isInterrupted()) {
                 try {
-                    if (tm != null) {
-                        tm.ping();
-                    }
-                } catch (Exception e) {
-                    tm = null;
-                }
-
-                if (tm == null) {
-                    reconnect();
-                    System.out.println("reconnect tm!");
+                    get();
+                } catch (TransactionManagerUnaccessibleException ignored) {
                 }
                 try {
                     Thread.sleep(500);
@@ -444,7 +436,23 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
             }
         }
 
-        TransactionManager get() {
+        TransactionManager get() throws TransactionManagerUnaccessibleException {
+            try {
+                if (tm != null) {
+                    tm.ping();
+                }
+            } catch (Exception e) {
+                tm = null;
+            }
+            if (tm == null) {
+                reconnect();
+            }
+            if (tm == null) {
+                System.out.println("reconnect tm failed!");
+                throw new TransactionManagerUnaccessibleException();
+            } else {
+                System.out.println("reconnect tm succeeded!");
+            }
             return tm;
         }
 
@@ -459,7 +467,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
             try {
                 tm = (TransactionManager) Naming.lookup(rmiPort + HostName.TM);
                 System.out.println(myRMIName + "'s xids is Empty ? " + xids.isEmpty());
-                for (Integer xid : xids) {
+                for (Long xid : xids) {
                     System.out.println(myRMIName + " Re-enlist to TM with xid" + xid);
                     tm.enlist(xid, ResourceManagerImpl.this);
                     if (dieTime == DieTime.AFTER_ENLIST) {

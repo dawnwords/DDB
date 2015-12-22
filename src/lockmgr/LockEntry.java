@@ -23,7 +23,7 @@ public class LockEntry {
                 currentStatus.lockTime().getTime() + LockManager.DEADLOCK_TIMEOUT - System.currentTimeMillis();
     }
 
-    public void addTransaction(int tid, LockType lockType) throws DeadlockException {
+    public void addTransaction(long tid, LockType lockType) throws DeadlockException {
         TransactionStatus status = getTransactionStatus(tid);
         if (status == null) {
             status = new TransactionStatus(tid, new Date(), lockType);
@@ -41,7 +41,7 @@ public class LockEntry {
         return currentStatus != status && !currentStatus.lockType().isShared(lockType);
     }
 
-    public int releaseCurrent() {
+    public long releaseCurrent() {
         TransactionStatus currentStatus = waitingQueue.poll();
         if (currentStatus == null) {
             return -1;
@@ -68,7 +68,7 @@ public class LockEntry {
         }
     }
 
-    public boolean release(int tid) {
+    public boolean release(long tid) {
         TransactionStatus currentStatus = waitingQueue.peek();
         if (currentStatus == null) {
             return false;
@@ -94,7 +94,7 @@ public class LockEntry {
         return waitingQueue.isEmpty();
     }
 
-    private TransactionStatus getTransactionStatus(int tid) {
+    private TransactionStatus getTransactionStatus(long tid) {
         for (TransactionStatus status : waitingQueue) {
             if (status.tid() == tid) {
                 return status;

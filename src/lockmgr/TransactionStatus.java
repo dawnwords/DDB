@@ -10,18 +10,18 @@ public class TransactionStatus implements Comparable<TransactionStatus> {
 
     private static final SimpleDateFormat FORMAT = new SimpleDateFormat("HH:mm:ss SSS");
     private final Thread waitingThread;
-    private int tid;
+    private long tid;
     private Date lockTime;
     private LockType lockType;
 
-    public TransactionStatus(int tid, Date lockTime, LockType lockType) {
+    public TransactionStatus(long tid, Date lockTime, LockType lockType) {
         this.tid = tid;
         this.lockTime = lockTime;
         this.lockType = lockType;
         this.waitingThread = Thread.currentThread();
     }
 
-    public int tid() {
+    public long tid() {
         return tid;
     }
 

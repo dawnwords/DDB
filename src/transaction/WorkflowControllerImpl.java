@@ -11,6 +11,7 @@ import java.rmi.RemoteException;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Workflow Controller for the Distributed Travel Reservation System.
@@ -22,13 +23,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class WorkflowControllerImpl extends Host implements WorkflowController {
 
-    private AtomicInteger xidCounter;
+    private AtomicLong xidCounter;
 
     private RMTMDaemon daemon;
 
     public WorkflowControllerImpl() throws RemoteException {
         super(HostName.WC);
-        xidCounter = new AtomicInteger(1);
+        xidCounter = new AtomicLong(System.currentTimeMillis());
 
         daemon = new RMTMDaemon();
         daemon.start();
@@ -56,25 +57,25 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
 
     // TRANSACTION INTERFACE
     @Override
-    public int start() throws RemoteException {
+    public long start() throws RemoteException {
         return xidCounter.getAndIncrement();
     }
 
     @Override
-    public boolean commit(int xid) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+    public boolean commit(long xid) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         System.out.println("Committing");
         return true;
     }
 
     @Override
-    public void abort(int xid) throws RemoteException, InvalidTransactionException {
+    public void abort(long xid) throws RemoteException, InvalidTransactionException {
         System.out.println("Aborting");
     }
 
 
     // ADMINISTRATIVE INTERFACE
     @Override
-    public boolean addFlight(int xid, String flightNum, int numSeats, int price) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+    public boolean addFlight(long xid, String flightNum, int numSeats, int price) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         if (flightNum == null || numSeats < 0 || price < 0) {
             return false;
         }
@@ -91,7 +92,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     }
 
     @Override
-    public boolean deleteFlight(int xid, String flightNum) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+    public boolean deleteFlight(long xid, String flightNum) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         if (flightNum == null) {
             return false;
         }
@@ -111,7 +112,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     }
 
     @Override
-    public boolean addRooms(int xid, String location, int numRooms, int price) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+    public boolean addRooms(long xid, String location, int numRooms, int price) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         if (location == null || numRooms < 0 || price < 0) {
             return false;
         }
@@ -128,7 +129,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     }
 
     @Override
-    public boolean deleteRooms(int xid, String location, int numRooms) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+    public boolean deleteRooms(long xid, String location, int numRooms) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         if (location == null || numRooms < 0) {
             return false;
         }
@@ -143,7 +144,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     }
 
     @Override
-    public boolean addCars(int xid, String location, int numCars, int price) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+    public boolean addCars(long xid, String location, int numCars, int price) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         if (location == null || numCars < 0 || price < 0) {
             return false;
         }
@@ -160,7 +161,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     }
 
     @Override
-    public boolean deleteCars(int xid, String location, int numCars) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+    public boolean deleteCars(long xid, String location, int numCars) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         if (location == null || numCars < 0) {
             return false;
         }
@@ -175,7 +176,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     }
 
     @Override
-    public boolean newCustomer(int xid, String custName) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+    public boolean newCustomer(long xid, String custName) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         if (custName == null) {
             return false;
         }
@@ -188,7 +189,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     }
 
     @Override
-    public boolean deleteCustomer(int xid, String custName) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+    public boolean deleteCustomer(long xid, String custName) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         if (custName == null) {
             return false;
         }
@@ -205,18 +206,18 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
 
     // QUERY INTERFACE
     @Override
-    public int queryFlight(int xid, String flightNum) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+    public int queryFlight(long xid, String flightNum) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         Flight flight = getFlight(xid, flightNum);
         return flight == null ? -1 : flight.numAvail();
     }
 
     @Override
-    public int queryFlightPrice(int xid, String flightNum) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+    public int queryFlightPrice(long xid, String flightNum) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         Flight flight = getFlight(xid, flightNum);
         return flight == null ? -1 : flight.price();
     }
 
-    private Flight getFlight(int xid, String flightNum) throws InvalidTransactionException, RemoteException, TransactionAbortedException {
+    private Flight getFlight(long xid, String flightNum) throws InvalidTransactionException, RemoteException, TransactionAbortedException {
         if (flightNum == null) {
             return null;
         }
@@ -229,18 +230,18 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     }
 
     @Override
-    public int queryRooms(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+    public int queryRooms(long xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         Hotel hotel = getRoom(xid, location);
         return hotel == null ? -1 : hotel.numAvail();
     }
 
     @Override
-    public int queryRoomsPrice(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+    public int queryRoomsPrice(long xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         Hotel hotel = getRoom(xid, location);
         return hotel == null ? -1 : hotel.price();
     }
 
-    private Hotel getRoom(int xid, String location) throws InvalidTransactionException, RemoteException, TransactionAbortedException {
+    private Hotel getRoom(long xid, String location) throws InvalidTransactionException, RemoteException, TransactionAbortedException {
         if (location == null) {
             return null;
         }
@@ -253,18 +254,18 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     }
 
     @Override
-    public int queryCars(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+    public int queryCars(long xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         Car car = getCar(xid, location);
         return car == null ? -1 : car.numAvail();
     }
 
     @Override
-    public int queryCarsPrice(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+    public int queryCarsPrice(long xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         Car car = getCar(xid, location);
         return car == null ? -1 : car.price();
     }
 
-    private Car getCar(int xid, String location) throws InvalidTransactionException, RemoteException, TransactionAbortedException {
+    private Car getCar(long xid, String location) throws InvalidTransactionException, RemoteException, TransactionAbortedException {
         if (location == null) {
             return null;
         }
@@ -277,7 +278,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     }
 
     @Override
-    public int queryCustomerBill(int xid, String custName) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+    public int queryCustomerBill(long xid, String custName) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         if (custName == null) {
             return -1;
         }
@@ -317,7 +318,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
 
     // RESERVATION INTERFACE
     @Override
-    public boolean reserveFlight(int xid, String custName, String flightNum) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+    public boolean reserveFlight(long xid, String custName, String flightNum) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         if (custName == null || flightNum == null) {
             return false;
         }
@@ -337,7 +338,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     }
 
     @Override
-    public boolean reserveCar(int xid, String custName, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+    public boolean reserveCar(long xid, String custName, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         if (custName == null || location == null) {
             return false;
         }
@@ -357,7 +358,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     }
 
     @Override
-    public boolean reserveRoom(int xid, String custName, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+    public boolean reserveRoom(long xid, String custName, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         if (custName == null || location == null) {
             return false;
         }
