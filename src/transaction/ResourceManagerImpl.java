@@ -41,7 +41,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         bindRMIRegistry();
     }
 
-    public void recover() {
+    private void recover() {
         HashSet<Long> tXids = loadTransactionLogs();
         if (tXids != null) {
             xids = tXids;
@@ -56,27 +56,28 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         if (dataFiles != null) {
             for (File dataFile : dataFiles) {
                 if (dataFile.isDirectory()) {
-                    //xTable
-                    long xid = Long.parseLong(dataFile.getName());
-                    if (!xids.contains(xid)) {
-                        throw new IllegalStateException("RM Recover Error: unexpected xid " + xid);
-                    }
-                    File[] xDataFiles = dataFile.listFiles();
-                    if (xDataFiles != null) {
-                        for (File xData : xDataFiles) {
-                            RMTable xTable = getTable(xid, xData.getName());
-                            try {
-                                xTable.relockAll();
-                            } catch (DeadlockException e) {
-                                throw new RuntimeException(e);
-                            }
-                        }
-                    }
-                } else {
-                    //main table
-                    if (!dataFile.getName().equals(TRANSACTION_LOG_FILENAME)) {
-                        getTable(dataFile.getName());
-                    }
+                    recoverXTableDir(dataFile);
+                } else if (!dataFile.getName().equals(TRANSACTION_LOG_FILENAME)) {
+                    //recover main table
+                    getMainTable(dataFile.getName());
+                }
+            }
+        }
+    }
+
+    private void recoverXTableDir(File xTableDir) {
+        long xid = Long.parseLong(xTableDir.getName());
+        if (!xids.contains(xid)) {
+            throw new IllegalStateException("RM Recover Error: unexpected xid " + xid);
+        }
+        File[] xDataFiles = xTableDir.listFiles();
+        if (xDataFiles != null) {
+            for (File xData : xDataFiles) {
+                RMTable xTable = getXTable(xid, xData.getName());
+                try {
+                    xTable.relockAll();
+                } catch (DeadlockException e) {
+                    throw new RuntimeException(e);
                 }
             }
         }
@@ -89,13 +90,13 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
 
     @Override
     public List<ResourceItem<K>> getUpdatedRows(long xid) {
-        RMTable<K> table = getTable(xid, myRMIName.name());
+        RMTable<K> table = getXTable(xid, myRMIName.name());
         return new ArrayList<ResourceItem<K>>(table.table.values());
     }
 
     @Override
     public List<ResourceItem<K>> getUpdatedRows() {
-        RMTable<K> table = getTable(myRMIName.name());
+        RMTable<K> table = getMainTable(myRMIName.name());
         return new ArrayList<ResourceItem<K>>(table.table.values());
     }
 
@@ -121,7 +122,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         return IOUtil.writeObject(myRMIName.name() + File.separator + xid, tableName, table);
     }
 
-    private RMTable<K> getTable(long xid, String tableName) {
+    private RMTable<K> getXTable(long xid, String tableName) {
         Hashtable<String, RMTable<K>> xidTables;
         synchronized (tables) {
             xidTables = tables.get(xid);
@@ -132,19 +133,16 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         }
         synchronized (xidTables) {
             RMTable<K> table = xidTables.get(tableName);
-            if (table != null)
+            if (table != null) {
                 return table;
+            }
             table = loadTable(xid, tableName);
             if (table == null) {
-                if (xid == -1)
-                    table = new RMTable<K>(tableName, null, -1, lm);
-                else {
-                    table = new RMTable<K>(tableName, getTable(tableName), xid, lm);
-                }
+                table = new RMTable<K>(tableName, xid == -1 ? null : getMainTable(tableName), xid, lm);
             } else {
                 if (xid != -1) {
                     table.setLockManager(lm);
-                    table.setParent(getTable(tableName));
+                    table.setParent(getMainTable(tableName));
                 }
             }
             xidTables.put(tableName, table);
@@ -152,8 +150,8 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         }
     }
 
-    private RMTable<K> getTable(String tableName) {
-        return getTable(-1, tableName);
+    private RMTable<K> getMainTable(String tableName) {
+        return getXTable(-1, tableName);
     }
 
     private HashSet<Long> loadTransactionLogs() {
@@ -177,7 +175,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     public ResourceItem<K> query(long xid, K key) throws DeadlockException, RemoteException {
         addXid(xid);
 
-        RMTable<K> table = getTable(xid, myRMIName.name());
+        RMTable<K> table = getXTable(xid, myRMIName.name());
         ResourceItem<K> item = table.get(key);
         if (item != null && !item.isDeleted()) {
             table.lock(key, LockType.READ);
@@ -194,7 +192,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         addXid(xid);
 
         List<ResourceItem<K>> result = new ArrayList<ResourceItem<K>>();
-        RMTable<K> table = getTable(xid, myRMIName.name());
+        RMTable<K> table = getXTable(xid, myRMIName.name());
 
         synchronized (table) {
             for (K key : table.keySet()) {
@@ -222,7 +220,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
 
         addXid(xid);
 
-        RMTable<K> table = getTable(xid, myRMIName.name());
+        RMTable<K> table = getXTable(xid, myRMIName.name());
         ResourceItem<K> item = table.get(key);
         if (item != null && !item.isDeleted()) {
             table.lock(key, LockType.WRITE);
@@ -239,7 +237,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     public boolean insert(long xid, ResourceItem<K> newItem) throws DeadlockException, RemoteException {
         addXid(xid);
 
-        RMTable<K> table = getTable(xid, myRMIName.name());
+        RMTable<K> table = getXTable(xid, myRMIName.name());
         ResourceItem<K> item = table.get(newItem.getKey());
         if (item != null && !item.isDeleted()) {
             return false;
@@ -256,7 +254,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     public boolean delete(long xid, K key) throws DeadlockException, RemoteException {
         addXid(xid);
 
-        RMTable<K> table = getTable(xid, myRMIName.name());
+        RMTable<K> table = getXTable(xid, myRMIName.name());
         ResourceItem<K> item = table.get(key);
         if (item != null && !item.isDeleted()) {
             table.lock(key, LockType.WRITE);
@@ -276,7 +274,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         addXid(xid);
 
         int n = 0;
-        RMTable<K> table = getTable(xid, myRMIName.name());
+        RMTable<K> table = getXTable(xid, myRMIName.name());
         synchronized (table) {
             for (K key : table.keySet()) {
                 ResourceItem<K> item = table.get(key);
@@ -325,7 +323,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         if (xid < 0) {
             throw new InvalidTransactionException(xid, "Xid must be positive.");
         }
-        if (xids.contains(xid)) {
+        if (!xids.contains(xid)) {
             throw new InvalidTransactionException(xid, "No Such Xid.");
         }
         if (dieTime == DieTime.AFTER_PREPARE)
@@ -372,12 +370,13 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         }
         synchronized (xids) {
             xids.remove(xid);
+            storeTransactionLogs(xids);
         }
     }
 
     private void commitXTable(RMTable<K> xTable) throws RemoteException {
         String tableName = xTable.getTableName();
-        RMTable<K> table = getTable(tableName);
+        RMTable<K> table = getMainTable(tableName);
         for (K key : xTable.keySet()) {
             ResourceItem<K> item = xTable.get(key);
             if (item.isDeleted()) {

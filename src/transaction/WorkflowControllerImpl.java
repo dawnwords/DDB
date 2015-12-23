@@ -67,13 +67,17 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
 
 
     // ADMINISTRATIVE INTERFACE
+    private <K> boolean exist(ResourceManager<K> rm, long xid, K key) throws DeadlockException, RemoteException {
+        return rm.query(xid, key) != null;
+    }
+
     private <T extends ResourceItem<String>> boolean add(long xid, String key, int num, int price, Class<T> clazz, HostName who) throws RemoteException, TransactionAbortedException {
         if (key == null || num < 0 || price < 0) {
             return false;
         }
         ResourceManager rm = daemon.rm(who);
         try {
-            if (rm.query(xid, key) != null) {
+            if (exist(rm, xid, key)) {
                 return false;
             }
             T newItem;
@@ -82,8 +86,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-            rm.insert(xid, newItem);
-            return true;
+            return rm.insert(xid, newItem);
         } catch (DeadlockException e) {
             throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
         }
@@ -162,7 +165,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         }
         ResourceManager customerRM = daemon.rm(HostName.RMCustomers);
         try {
-            return customerRM.query(xid, custName) == null && customerRM.insert(xid, new Customer(custName));
+            return !exist(customerRM, xid, custName) && customerRM.insert(xid, new Customer(custName));
         } catch (DeadlockException e) {
             throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
         }
@@ -176,7 +179,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         ResourceManager customerRM = daemon.rm(HostName.RMCustomers);
         ResourceManager reservationRM = daemon.rm(HostName.RMReservations);
         try {
-            return customerRM.query(xid, custName) != null &&
+            return exist(customerRM, xid, custName) &&
                     customerRM.delete(xid, custName) &&
                     reservationRM.delete(xid, "custName", custName) >= 0;
         } catch (DeadlockException e) {
@@ -185,7 +188,6 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     }
 
     // QUERY INTERFACE
-
     private <T> T get(long xid, String key, Class<? extends T> clazz, HostName who) throws RemoteException, TransactionAbortedException {
         if (key == null) {
             return null;
@@ -284,8 +286,8 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         try {
             ResourceItem<String> oldItem = rm.query(xid, key);
             if (oldItem == null ||
-                    customerRM.query(xid, custName) == null ||
-                    reservationRM.query(xid, new ReservationKey(custName, type, key)) == null ||
+                    exist(customerRM, xid, custName) ||
+                    exist(reservationRM, xid, new ReservationKey(custName, type, key))||
                     !reservationRM.insert(xid, new Reservation(custName, type, key))) {
                 return false;
             }
@@ -377,6 +379,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
             if (!bind(HostName.RMCars) ||
                     !bind(HostName.RMFlights) ||
                     !bind(HostName.RMRooms) ||
+                    !bind(HostName.RMCustomers) ||
                     !bind(HostName.RMReservations) ||
                     !bind(HostName.TM)) {
                 return false;

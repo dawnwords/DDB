@@ -70,7 +70,6 @@ public class LockManager {
             LockEntry lockEntry = keyLockEntryMap.get(dataKey);
             if (lockEntry == null) {
                 iterator.remove();
-                result = false;
             } else {
                 if (!lockEntry.release(tid)) {
                     result = false;
