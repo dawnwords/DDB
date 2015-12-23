@@ -63,4 +63,14 @@ public class Flight extends ResourceItem<String> {
     protected Object indexValue() {
         return flightNum;
     }
+
+    @Override
+    public String toString() {
+        return "Flight{" +
+                "flightNum='" + flightNum + '\'' +
+                ", price=" + price +
+                ", numSeats=" + numSeats +
+                ", numAvail=" + numAvail +
+                '}';
+    }
 }

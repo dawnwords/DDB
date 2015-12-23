@@ -1,5 +1,7 @@
 package transaction;
 
+import util.Log;
+
 import java.io.FileInputStream;
 import java.rmi.Naming;
 import java.rmi.Remote;
@@ -30,7 +32,7 @@ public abstract class Host extends UnicastRemoteObject {
 
     public void setDieTime(DieTime dieTime) throws RemoteException {
         this.dieTime = dieTime;
-        System.out.println("Die time set to : " + dieTime);
+        Log.i("Die time set to : " + dieTime);
     }
 
     protected void bindRMIRegistry() {
@@ -38,7 +40,7 @@ public abstract class Host extends UnicastRemoteObject {
         try {
             LocateRegistry.createRegistry(getPort(properties, myRMIName));
             Naming.rebind(getRMI(properties, myRMIName), this);
-            System.out.println(myRMIName + " bound");
+            Log.i(myRMIName + " bound");
         } catch (Exception e) {
             throw new RuntimeException(myRMIName + " not bound:" + e);
         }

@@ -59,4 +59,12 @@ public class Reservation extends ResourceItem<ReservationKey> {
         return o;
     }
 
+    @Override
+    public String toString() {
+        return "Reservation{" +
+                "custName='" + custName + '\'' +
+                ", resvType=" + resvType +
+                ", resvKey='" + resvKey + '\'' +
+                '}';
+    }
 }

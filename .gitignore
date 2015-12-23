@@ -3,3 +3,5 @@
 *.iml
 /bin
 /.idea
+/RM*
+*.log

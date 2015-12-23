@@ -86,4 +86,14 @@ public class RMTable<K> implements Serializable {
         }
         return result;
     }
+
+    @Override
+    public String toString() {
+        return "RMTable{" +
+                "xid=" + xid +
+                ", tableName='" + tableName + '\'' +
+                ", locks=" + locks +
+                ", table=" + table +
+                '}';
+    }
 }

@@ -8,6 +8,7 @@ import transaction.exception.InvalidIndexException;
 import transaction.exception.InvalidTransactionException;
 import transaction.exception.TransactionManagerUnaccessibleException;
 import util.IOUtil;
+import util.Log;
 
 import java.io.File;
 import java.rmi.RemoteException;
@@ -46,7 +47,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
             xids = tXids;
         }
 
-        File dataDir = new File("data");
+        File dataDir = new File(myRMIName.name());
         if (!dataDir.exists()) {
             dataDir.mkdirs();
         }
@@ -56,7 +57,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
             for (File dataFile : dataFiles) {
                 if (dataFile.isDirectory()) {
                     //xTable
-                    long xid = Integer.parseInt(dataFile.getName());
+                    long xid = Long.parseLong(dataFile.getName());
                     if (!xids.contains(xid)) {
                         throw new IllegalStateException("RM Recover Error: unexpected xid " + xid);
                     }
@@ -73,7 +74,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
                     }
                 } else {
                     //main table
-                    if (dataFile.getName().equals(TRANSACTION_LOG_FILENAME)) {
+                    if (!dataFile.getName().equals(TRANSACTION_LOG_FILENAME)) {
                         getTable(dataFile.getName());
                     }
                 }
@@ -113,11 +114,11 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     private RMTable<K> loadTable(long xid, String tableName) {
-        return IOUtil.readObject("data" + File.separator + (xid == -1 ? "" : xid + File.separator) + tableName);
+        return IOUtil.readObject(myRMIName.name() + File.separator + (xid == -1 ? "" : xid + File.separator) + tableName);
     }
 
     private boolean storeTable(long xid, String tableName, RMTable table) {
-        return IOUtil.writeObject("data" + File.separator + xid, tableName, table);
+        return IOUtil.writeObject(myRMIName.name() + File.separator + xid, tableName, table);
     }
 
     private RMTable<K> getTable(long xid, String tableName) {
@@ -156,11 +157,11 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     private HashSet<Long> loadTransactionLogs() {
-        return IOUtil.readObject("data" + File.separator + "transactions.log");
+        return IOUtil.readObject(myRMIName.name() + File.separator + TRANSACTION_LOG_FILENAME);
     }
 
     private boolean storeTransactionLogs(HashSet<Long> xids) {
-        return IOUtil.writeObject("data", "transactions.log", xids);
+        return IOUtil.writeObject(myRMIName.name(), TRANSACTION_LOG_FILENAME, xids);
     }
 
     @Override
@@ -361,9 +362,9 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
                 if (commit) {
                     commitXTable(xidTables.get(tableName));
                 }
-                new File("data/" + xid + "/" + tableName).delete();
+                new File(myRMIName.name() + File.separator + xid + File.separator + tableName).delete();
             }
-            new File("data/" + xid).delete();
+            new File(myRMIName.name() + File.separator + xid).delete();
             tables.remove(xid);
         }
         if (!lm.unlockAll(xid)) {
@@ -385,7 +386,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
                 table.put(item);
             }
         }
-        if (!IOUtil.writeObject("data", tableName, table)) {
+        if (!IOUtil.writeObject(myRMIName.name(), tableName, table)) {
             throw new RemoteException("Can't write table to disk");
         }
     }
@@ -420,7 +421,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
                 reconnect();
             }
             if (tm == null) {
-                System.out.println("reconnect tm failed!");
+                Log.e("reconnect tm failed!");
                 throw new TransactionManagerUnaccessibleException();
             }
             return tm;
@@ -429,17 +430,17 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         boolean reconnect() {
             try {
                 tm = (TransactionManager) lookUp(HostName.TM);
-                System.out.println(myRMIName + "'s xids is Empty ? " + xids.isEmpty());
+                Log.i(myRMIName + "'s xids is Empty ? " + xids.isEmpty());
                 for (Long xid : xids) {
-                    System.out.println(myRMIName + " Re-enlist to TM with xid" + xid);
+                    Log.i(myRMIName + " Re-enlist to TM with xid" + xid);
                     tm.enlist(xid, ResourceManagerImpl.this);
                     if (dieTime == DieTime.AFTER_ENLIST) {
                         dieNow();
                     }
                 }
-                System.out.println(myRMIName + " bound to TM");
+                Log.i(myRMIName + " bound to TM");
             } catch (Exception e) {
-                System.err.println(myRMIName + " enlist error:" + e);
+                Log.e(myRMIName + " enlist error:" + e);
                 return false;
             }
             return true;

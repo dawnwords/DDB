@@ -2,7 +2,9 @@ package transaction;
 
 import transaction.exception.InvalidTransactionException;
 import util.IOUtil;
+import util.Log;
 
+import java.io.Serializable;
 import java.rmi.RemoteException;
 import java.util.ArrayList;
 import java.util.List;
@@ -77,6 +79,7 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
         }
         xidRMMap.put(xid, new ArrayList<ResourceManager>());
         xidStateMap.put(xid, new StateCounter());
+        Log.i("start:%s", xidStateMap);
         return true;
     }
 
@@ -151,7 +154,7 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
             throw new InvalidTransactionException(xid, "no such xid to abort");
         }
 
-        if (state.state != State.Commit) {
+        if (state.state != State.Abort) {
             throw new IllegalStateException(String.format("Illegal State: %s, for abort phase for %d", state, xid));
         }
 
@@ -184,7 +187,7 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
         Start, Prepare, Commit, Abort, Finish
     }
 
-    private class StateCounter {
+    private class StateCounter implements Serializable {
         State state;
         AtomicInteger count;
 

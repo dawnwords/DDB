@@ -62,4 +62,14 @@ public class Hotel extends ResourceItem<String> {
     protected Object indexValue() {
         return location;
     }
+
+    @Override
+    public String toString() {
+        return "Hotel{" +
+                "location='" + location + '\'' +
+                ", price=" + price +
+                ", numRooms=" + numRooms +
+                ", numAvail=" + numAvail +
+                '}';
+    }
 }

@@ -62,4 +62,14 @@ public class Car extends ResourceItem<String> {
         car.isDeleted = isDeleted;
         return car;
     }
+
+    @Override
+    public String toString() {
+        return "Car{" +
+                "location='" + location + '\'' +
+                ", price=" + price +
+                ", numCars=" + numCars +
+                ", numAvail=" + numAvail +
+                '}';
+    }
 }

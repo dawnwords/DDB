@@ -36,4 +36,11 @@ public class Customer extends ResourceItem<String> {
     protected Object indexValue() {
         return custName;
     }
+
+    @Override
+    public String toString() {
+        return "Customer{" +
+                "custName='" + custName + '\'' +
+                '}';
+    }
 }

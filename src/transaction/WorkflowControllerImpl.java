@@ -3,6 +3,7 @@ package transaction;
 import lockmgr.DeadlockException;
 import transaction.bean.*;
 import transaction.exception.TransactionAbortedException;
+import util.Log;
 
 import java.rmi.RemoteException;
 import java.util.Hashtable;
@@ -45,23 +46,27 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     // TRANSACTION INTERFACE
     @Override
     public long start() throws RemoteException {
-        return xidCounter.getAndIncrement();
+        long xid = xidCounter.getAndIncrement();
+        Log.i("Start Transaction: %d", xid);
+        daemon.tm().start(xid);
+        return xid;
     }
 
     @Override
     public boolean commit(long xid) throws RemoteException, TransactionAbortedException {
-        System.out.println("Committing");
+        Log.i("Commit Transaction: %d", xid);
+        daemon.tm().commit(xid);
         return true;
     }
 
     @Override
     public void abort(long xid) throws RemoteException {
-        System.out.println("Aborting");
+        Log.i("Abort Transaction: %d", xid);
+        daemon.tm().abort(xid);
     }
 
 
     // ADMINISTRATIVE INTERFACE
-
     private <T extends ResourceItem<String>> boolean add(long xid, String key, int num, int price, Class<T> clazz, HostName who) throws RemoteException, TransactionAbortedException {
         if (key == null || num < 0 || price < 0) {
             return false;
@@ -400,10 +405,10 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
 
             try {
                 hostMap.put(who, (Remote) lookUp(who));
-                System.out.println("WC bound to " + who.name());
+                Log.i("WC bound to " + who.name());
                 return true;
             } catch (Exception e) {
-                System.err.println("WC cannot bind to " + who.name());
+                Log.e("WC cannot bind to " + who.name());
                 e.printStackTrace();
                 return false;
             }
@@ -454,6 +459,10 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
 
         <K> ResourceManager<K> rm(HostName who) {
             return (ResourceManager<K>) hostMap.get(who);
+        }
+
+        TransactionManager tm() {
+            return (TransactionManager) hostMap.get(HostName.TM);
         }
     }
 }
