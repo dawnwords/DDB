@@ -21,13 +21,12 @@ import java.util.concurrent.atomic.AtomicLong;
 public class WorkflowControllerImpl extends Host implements WorkflowController {
 
     private AtomicLong xidCounter;
-
-    private RMTMDaemon daemon;
+    private Hashtable<HostName, Remote> hostMap;
 
     public WorkflowControllerImpl() throws RemoteException {
         super(HostName.WC);
         xidCounter = new AtomicLong(System.currentTimeMillis());
-        daemon = new RMTMDaemon();
+        hostMap = new Hashtable<HostName, Remote>();
     }
 
     public static void main(String args[]) {
@@ -39,8 +38,42 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     }
 
     public void startUp() {
-        daemon.start();
         bindRMIRegistry();
+        bind(HostName.RMCars);
+        bind(HostName.RMFlights);
+        bind(HostName.RMRooms);
+        bind(HostName.RMCustomers);
+        bind(HostName.RMReservations);
+        bind(HostName.TM);
+    }
+
+    private boolean bind(HostName who) {
+        Remote host = hostMap.get(who);
+        if (host != null) {
+            try {
+                host.ping();
+                return true;
+            } catch (Exception ignored) {
+            }
+        }
+
+        try {
+            hostMap.put(who, (Remote) lookUp(who));
+            Log.i("WC bound to " + who.name());
+            return true;
+        } catch (Exception e) {
+            Log.e("WC cannot bind to " + who.name());
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    private <K> ResourceManager<K> rm(HostName who) {
+        return (ResourceManager<K>) hostMap.get(who);
+    }
+
+    private TransactionManager tm() {
+        return (TransactionManager) hostMap.get(HostName.TM);
     }
 
     // TRANSACTION INTERFACE
@@ -48,23 +81,22 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     public long start() throws RemoteException {
         long xid = xidCounter.getAndIncrement();
         Log.i("Start Transaction: %d", xid);
-        daemon.tm().start(xid);
+        tm().start(xid);
         return xid;
     }
 
     @Override
     public boolean commit(long xid) throws RemoteException, TransactionAbortedException {
         Log.i("Commit Transaction: %d", xid);
-        daemon.tm().commit(xid);
+        tm().commit(xid);
         return true;
     }
 
     @Override
     public void abort(long xid) throws RemoteException {
         Log.i("Abort Transaction: %d", xid);
-        daemon.tm().abort(xid);
+        tm().abort(xid);
     }
-
 
     // ADMINISTRATIVE INTERFACE
     private <K> boolean exist(ResourceManager<K> rm, long xid, K key) throws DeadlockException, RemoteException {
@@ -75,7 +107,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         if (key == null || num < 0 || price < 0) {
             return false;
         }
-        ResourceManager rm = daemon.rm(who);
+        ResourceManager rm = rm(who);
         try {
             if (exist(rm, xid, key)) {
                 return false;
@@ -102,8 +134,8 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         if (flightNum == null) {
             return false;
         }
-        ResourceManager flightRM = daemon.rm(HostName.RMFlights);
-        ResourceManager reservationRM = daemon.rm(HostName.RMReservations);
+        ResourceManager flightRM = rm(HostName.RMFlights);
+        ResourceManager reservationRM = rm(HostName.RMReservations);
         try {
             List<ResourceItem<ReservationKey>> reservations = reservationRM.query(xid);
             for (ResourceItem<ReservationKey> reservation : reservations) {
@@ -128,7 +160,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         if (location == null || numRooms < 0) {
             return false;
         }
-        ResourceManager roomRM = daemon.rm(HostName.RMRooms);
+        ResourceManager roomRM = rm(HostName.RMRooms);
         try {
             Hotel hotel = (Hotel) roomRM.query(xid, location);
             return !(hotel == null || hotel.numAvail() < numRooms) &&
@@ -148,7 +180,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         if (location == null || numCars < 0) {
             return false;
         }
-        ResourceManager carRM = daemon.rm(HostName.RMCars);
+        ResourceManager carRM = rm(HostName.RMCars);
         try {
             Car car = (Car) carRM.query(xid, location);
             return !(car == null || car.numAvail() < numCars) &&
@@ -163,7 +195,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         if (custName == null) {
             return false;
         }
-        ResourceManager customerRM = daemon.rm(HostName.RMCustomers);
+        ResourceManager customerRM = rm(HostName.RMCustomers);
         try {
             return !exist(customerRM, xid, custName) && customerRM.insert(xid, new Customer(custName));
         } catch (DeadlockException e) {
@@ -176,8 +208,8 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         if (custName == null) {
             return false;
         }
-        ResourceManager customerRM = daemon.rm(HostName.RMCustomers);
-        ResourceManager reservationRM = daemon.rm(HostName.RMReservations);
+        ResourceManager customerRM = rm(HostName.RMCustomers);
+        ResourceManager reservationRM = rm(HostName.RMReservations);
         try {
             return exist(customerRM, xid, custName) &&
                     customerRM.delete(xid, custName) &&
@@ -192,7 +224,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         if (key == null) {
             return null;
         }
-        ResourceManager rm = daemon.rm(who);
+        ResourceManager rm = rm(who);
         try {
             return clazz.cast(rm.query(xid, key));
         } catch (DeadlockException e) {
@@ -241,10 +273,10 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         if (custName == null) {
             return -1;
         }
-        ResourceManager reservationRM = daemon.rm(HostName.RMReservations);
-        ResourceManager carRM = daemon.rm(HostName.RMCars);
-        ResourceManager hotelRM = daemon.rm(HostName.RMRooms);
-        ResourceManager flightRM = daemon.rm(HostName.RMFlights);
+        ResourceManager reservationRM = rm(HostName.RMReservations);
+        ResourceManager carRM = rm(HostName.RMCars);
+        ResourceManager hotelRM = rm(HostName.RMRooms);
+        ResourceManager flightRM = rm(HostName.RMFlights);
         try {
             List<ResourceItem<ReservationKey>> reservations = reservationRM.query(xid, "custName", custName);
             if (reservations == null || reservations.isEmpty()) {
@@ -280,9 +312,9 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         if (custName == null || key == null) {
             return false;
         }
-        ResourceManager rm = daemon.rm(who);
-        ResourceManager customerRM = daemon.rm(HostName.RMCustomers);
-        ResourceManager reservationRM = daemon.rm(HostName.RMReservations);
+        ResourceManager rm = rm(who);
+        ResourceManager customerRM = rm(HostName.RMCustomers);
+        ResourceManager reservationRM = rm(HostName.RMReservations);
         try {
             ResourceItem<String> oldItem = rm.query(xid, key);
             if (oldItem == null ||
@@ -321,151 +353,100 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     // TECHNICAL/TESTING INTERFACE
     @Override
     public boolean reconnect() throws RemoteException {
-        return daemon.reconnect();
+        if (!bind(HostName.RMCars) ||
+                !bind(HostName.RMFlights) ||
+                !bind(HostName.RMRooms) ||
+                !bind(HostName.RMCustomers) ||
+                !bind(HostName.RMReservations) ||
+                !bind(HostName.TM)) {
+            return false;
+        }
+        try {
+            boolean result = true;
+            for (Remote host : hostMap.values()) {
+                result = result && host.reconnect();
+            }
+            return result;
+        } catch (Exception e) {
+            System.err.println("Some RM cannot reconnect:" + e);
+            return false;
+        }
     }
 
     @Override
     public boolean dieNow(HostName who) throws RemoteException {
-        return daemon.dieNow(who);
+        if (who == HostName.ALL) {
+            boolean result = true;
+            for (Remote host : hostMap.values()) {
+                result = result && dieNow(host);
+            }
+            return result;
+        }
+        Remote host = hostMap.get(who);
+        if (host == null) {
+            throw new IllegalArgumentException("no such host:" + who);
+        }
+        return dieNow(host);
     }
 
     public boolean dieRMAfterEnlist(HostName who) throws RemoteException {
-        return daemon.dieRM(who, DieTime.AFTER_ENLIST);
+        return dieRM(who, DieTime.AFTER_ENLIST);
     }
 
     public boolean dieRMBeforePrepare(HostName who) throws RemoteException {
-        return daemon.dieRM(who, DieTime.BEFORE_PREPARE);
+        return dieRM(who, DieTime.BEFORE_PREPARE);
     }
 
     public boolean dieRMAfterPrepare(HostName who) throws RemoteException {
-        return daemon.dieRM(who, DieTime.AFTER_PREPARE);
+        return dieRM(who, DieTime.AFTER_PREPARE);
     }
 
     public boolean dieRMBeforeCommit(HostName who) throws RemoteException {
-        return daemon.dieRM(who, DieTime.BEFORE_COMMIT);
+        return dieRM(who, DieTime.BEFORE_COMMIT);
     }
 
     public boolean dieRMBeforeAbort(HostName who) throws RemoteException {
-        return daemon.dieRM(who, DieTime.BEFORE_ABORT);
+        return dieRM(who, DieTime.BEFORE_ABORT);
     }
 
     public boolean dieTMBeforeCommit() throws RemoteException {
-        return daemon.dieTM(DieTime.BEFORE_COMMIT);
+        return dieTM(DieTime.BEFORE_COMMIT);
     }
 
     public boolean dieTMAfterCommit() throws RemoteException {
-        return daemon.dieTM(DieTime.AFTER_COMMIT);
+        return dieTM(DieTime.AFTER_COMMIT);
     }
 
-    private class RMTMDaemon extends Thread {
-        private Hashtable<HostName, Remote> hostMap;
+    @Override
+    public boolean dieNow() throws RemoteException {
+        throw new RuntimeException("WC will not die!");
+    }
 
-        public RMTMDaemon() {
-            hostMap = new Hashtable<HostName, Remote>();
+    private boolean dieNow(Remote host) {
+        try {
+            host.dieNow();
+        } catch (RemoteException e) {
+            e.printStackTrace();
+            return false;
         }
+        return true;
+    }
 
-        @Override
-        public void run() {
-            while (!isInterrupted()) {
-                reconnect();
-                try {
-                    Thread.sleep(500);
-                } catch (InterruptedException ignored) {
-                }
-            }
-        }
-
-        boolean reconnect() {
-            if (!bind(HostName.RMCars) ||
-                    !bind(HostName.RMFlights) ||
-                    !bind(HostName.RMRooms) ||
-                    !bind(HostName.RMCustomers) ||
-                    !bind(HostName.RMReservations) ||
-                    !bind(HostName.TM)) {
-                return false;
-            }
-            try {
-                boolean result = true;
-                for (Remote host : hostMap.values()) {
-                    result = result && host.reconnect();
-                }
-                return result;
-            } catch (Exception e) {
-                System.err.println("Some RM cannot reconnect:" + e);
-                return false;
-            }
-        }
-
-        boolean bind(HostName who) {
-            Remote host = hostMap.get(who);
-            if (host != null) {
-                try {
-                    host.ping();
-                    return true;
-                } catch (Exception ignored) {
-                }
-            }
-
-            try {
-                hostMap.put(who, (Remote) lookUp(who));
-                Log.i("WC bound to " + who.name());
+    private boolean dieRM(HostName who, DieTime time) throws RemoteException {
+        switch (who) {
+            case RMFlights:
+            case RMRooms:
+            case RMReservations:
+            case RMCars:
+                hostMap.get(who).setDieTime(time);
                 return true;
-            } catch (Exception e) {
-                Log.e("WC cannot bind to " + who.name());
-                e.printStackTrace();
+            default:
                 return false;
-            }
         }
+    }
 
-        boolean dieNow(HostName name) {
-            if (name == HostName.ALL) {
-                boolean result = true;
-                for (Remote host : hostMap.values()) {
-                    result = result && dieNow(host);
-                }
-                return result;
-            }
-            Remote host = hostMap.get(name);
-            if (host == null) {
-                throw new IllegalArgumentException("no such host:" + name);
-            }
-            return dieNow(host);
-        }
-
-        boolean dieNow(Remote host) {
-            try {
-                host.dieNow();
-            } catch (RemoteException e) {
-                e.printStackTrace();
-                return false;
-            }
-            return true;
-        }
-
-        boolean dieRM(HostName who, DieTime time) throws RemoteException {
-            switch (who) {
-                case RMFlights:
-                case RMRooms:
-                case RMReservations:
-                case RMCars:
-                    daemon.hostMap.get(who).setDieTime(time);
-                    return true;
-                default:
-                    return false;
-            }
-        }
-
-        boolean dieTM(DieTime time) throws RemoteException {
-            daemon.hostMap.get(HostName.TM).setDieTime(time);
-            return true;
-        }
-
-        <K> ResourceManager<K> rm(HostName who) {
-            return (ResourceManager<K>) hostMap.get(who);
-        }
-
-        TransactionManager tm() {
-            return (TransactionManager) hostMap.get(HostName.TM);
-        }
+    private boolean dieTM(DieTime time) throws RemoteException {
+        hostMap.get(HostName.TM).setDieTime(time);
+        return true;
     }
 }

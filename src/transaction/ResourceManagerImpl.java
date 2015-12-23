@@ -106,13 +106,24 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     @Override
+    public boolean dieNow() throws RemoteException {
+        tmDaemon.interrupt();
+        lm = null;
+        xids = null;
+        tables = null;
+        tmDaemon = null;
+        throw new RemoteException(myRMIName.name() + " died");
+    }
+
+    @Override
     public boolean reconnect() {
-        try {
-            tmDaemon.get();
-            return true;
-        } catch (TransactionManagerUnaccessibleException e) {
-            return false;
-        }
+        xids = new HashSet<Long>();
+        lm = new LockManager();
+        tables = new Hashtable<Long, Hashtable<String, RMTable<K>>>();
+        tmDaemon = new TMDaemon();
+        recover();
+        tmDaemon.start();
+        return true;
     }
 
     public TransactionManager getTransactionManager() throws TransactionManagerUnaccessibleException {
@@ -361,7 +372,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         if (xidTables == null) {
             throw new InvalidTransactionException(xid, "No Such Xid.");
         }
-        Log.i((commit? "Commit for " : "Abort for") + xid);
+        Log.i((commit ? "Commit for " : "Abort for") + xid);
         synchronized (xidTables) {
             for (String tableName : xidTables.keySet()) {
                 if (commit) {

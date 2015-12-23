@@ -68,7 +68,17 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
     }
 
     @Override
+    public boolean dieNow() throws RemoteException {
+        xidRMMap = null;
+        xidStateMap = null;
+        logLock = null;
+        throw new RemoteException("TM died");
+    }
+
+    @Override
     public boolean reconnect() throws RemoteException {
+        logLock = new ReentrantReadWriteLock();
+        recover();
         return true;
     }
 

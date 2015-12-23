@@ -22,11 +22,6 @@ public abstract class Host extends UnicastRemoteObject {
         myRMIName = rmiName;
     }
 
-    public boolean dieNow() throws RemoteException {
-        System.exit(1);
-        return true;
-    }
-
     public void ping() throws RemoteException {
     }
 
