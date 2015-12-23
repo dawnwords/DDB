@@ -107,7 +107,12 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
 
     @Override
     public boolean reconnect() {
-        return tmDaemon.reconnect();
+        try {
+            tmDaemon.get();
+            return true;
+        } catch (TransactionManagerUnaccessibleException e) {
+            return false;
+        }
     }
 
     public TransactionManager getTransactionManager() throws TransactionManagerUnaccessibleException {
@@ -326,6 +331,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         if (!xids.contains(xid)) {
             throw new InvalidTransactionException(xid, "No Such Xid.");
         }
+        Log.i("Prepare for %d", xid);
         if (dieTime == DieTime.AFTER_PREPARE)
             dieNow();
         return true;
@@ -355,6 +361,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         if (xidTables == null) {
             throw new InvalidTransactionException(xid, "No Such Xid.");
         }
+        Log.i((commit? "Commit for " : "Abort for") + xid);
         synchronized (xidTables) {
             for (String tableName : xidTables.keySet()) {
                 if (commit) {

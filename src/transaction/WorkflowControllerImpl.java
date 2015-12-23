@@ -286,8 +286,8 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         try {
             ResourceItem<String> oldItem = rm.query(xid, key);
             if (oldItem == null ||
-                    exist(customerRM, xid, custName) ||
-                    exist(reservationRM, xid, new ReservationKey(custName, type, key))||
+                    !exist(customerRM, xid, custName) ||
+                    exist(reservationRM, xid, new ReservationKey(custName, type, key)) ||
                     !reservationRM.insert(xid, new Reservation(custName, type, key))) {
                 return false;
             }

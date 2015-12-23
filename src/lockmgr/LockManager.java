@@ -131,6 +131,7 @@ public class LockManager {
                 Queue<String> keys = tidKeyMap.get(tid);
                 if (keys != null) {
                     keys.remove(key);
+                    printLockState();
                 }
             }
         }
