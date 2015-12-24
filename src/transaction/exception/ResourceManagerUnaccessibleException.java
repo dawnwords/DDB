@@ -6,6 +6,8 @@
  */
 package transaction.exception;
 
+import transaction.Host;
+
 /**
  * @author RAdmin
  *         <p/>
@@ -13,4 +15,7 @@ package transaction.exception;
  *         Window - Preferences - Java - Code Style - Code Templates
  */
 public class ResourceManagerUnaccessibleException extends Exception {
+    public ResourceManagerUnaccessibleException(Host.HostName rm) {
+        super(rm.name());
+    }
 }

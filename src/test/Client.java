@@ -1,6 +1,4 @@
-package transaction;
-
-import test.BaseClient;
+package test;
 
 /**
  * A toy client of the Distributed Travel Reservation System.
@@ -19,6 +17,6 @@ public class Client extends BaseClient {
         assertEqual("Check Flight Seat Number", wc().queryFlight(xid, "347"), 230);
         assertTrue("Add customer", wc().newCustomer(xid, "John"));
         assertTrue("Reserve flight", wc().reserveFlight(xid, "John", "347"));
-        assertEqual("Check Flight Seat Number", wc().queryFlight(xid, "347"), 229);
+        assertTrue("Commit", wc().commit(xid));
     }
 }

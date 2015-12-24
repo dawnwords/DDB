@@ -30,6 +30,10 @@ public abstract class Host extends UnicastRemoteObject {
         Log.i("Die time set to : " + dieTime);
     }
 
+    public String hostName() {
+        return myRMIName.name();
+    }
+
     protected void bindRMIRegistry() {
         Properties properties = loadProperties();
         try {

@@ -13,4 +13,6 @@ public interface Remote extends java.rmi.Remote {
     void setDieTime(DieTime dieTime) throws RemoteException;
 
     boolean reconnect() throws RemoteException;
+
+    String hostName() throws RemoteException;
 }

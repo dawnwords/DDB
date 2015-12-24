@@ -1,6 +1,8 @@
 package transaction;
 
+import transaction.exception.IllegalTransactionStateException;
 import transaction.exception.InvalidTransactionException;
+import transaction.exception.TransactionAbortedException;
 import util.IOUtil;
 import util.Log;
 
@@ -69,15 +71,14 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
 
     @Override
     public boolean dieNow() throws RemoteException {
-        xidRMMap = null;
-        xidStateMap = null;
-        logLock = null;
+        xidRMMap.clear();
+        xidStateMap.clear();
         throw new RemoteException("TM died");
     }
 
     @Override
     public boolean reconnect() throws RemoteException {
-        logLock = new ReentrantReadWriteLock();
+        dieTime = DieTime.NO_DIE;
         recover();
         return true;
     }
@@ -94,18 +95,26 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
     }
 
     @Override
-    public boolean commit(long xid) throws RemoteException {
+    public boolean commit(long xid) throws RemoteException, TransactionAbortedException {
         if (dieTime == DieTime.BEFORE_COMMIT) {
             dieNow();
         }
-        boolean result = prepare(xid) ? doCommit(xid) : abort(xid);
-        if (dieTime == DieTime.AFTER_COMMIT) {
-            dieNow();
+        try {
+            if (prepare(xid)) {
+                end(xid, State.Commit);
+                if (dieTime == DieTime.AFTER_COMMIT) {
+                    dieNow();
+                }
+                return true;
+            }
+        } catch (IllegalTransactionStateException e) {
+            throw new TransactionAbortedException(xid, e.getMessage());
         }
-        return result;
+        abort(xid);
+        throw new TransactionAbortedException(xid, "Prepare Failed");
     }
 
-    private boolean prepare(long xid) {
+    private boolean prepare(long xid) throws IllegalTransactionStateException {
         Queue<ResourceManager> rmList = xidRMMap.get(xid);
         StateCounter state = xidStateMap.get(xid);
         if (rmList == null || state == null) {
@@ -113,110 +122,115 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
         }
 
         if (state.state != State.Start) {
-            throw new IllegalStateException(String.format("Illegal State: %s, for prepare phase for %d", state, xid));
+            throw new IllegalTransactionStateException(xid, state.state, "prepare phase");
         }
 
-        state.state(State.Prepare);
+        int expect = rmList.size();
+        state.state(State.Prepare, expect);
         try {
             for (ResourceManager resourceManager : rmList) {
                 if (resourceManager.prepare(xid)) {
-                    Log.i("Prepare for %d:[%s]%s", xid, state, resourceManager);
-                    if (state.increaseAndCheck(rmList.size())) {
-                        state.state(State.Commit);
+                    Log.i("Prepare for %d:[%s]%s", xid, state, resourceManager.hostName());
+                    if (state.increaseAndCheck()) {
+                        state.state(State.Commit, expect);
                         return true;
                     }
                 }
             }
         } catch (Exception ignored) {
         }
-        state.state(State.Abort);
-        return false;
-    }
-
-    private boolean doCommit(long xid) {
-        Queue<ResourceManager> rmList = xidRMMap.get(xid);
-        StateCounter state = xidStateMap.get(xid);
-        if (rmList == null || state == null) {
-            throw new InvalidTransactionException(xid, "no such xid to commit");
-        }
-
-        if (state.state != State.Commit) {
-            throw new IllegalStateException(String.format("Illegal State: %s, for commit phase for %d", state, xid));
-        }
-
-        for (ResourceManager resourceManager : rmList) {
-            try {
-                resourceManager.commit(xid);
-                Log.i("Commit for %d:[%s]%s", xid, state, resourceManager);
-                if (state.increaseAndCheck(rmList.size())) {
-                    state.state(State.Finish);
-                    return true;
-                }
-            } catch (RemoteException ignored) {
-            }
-        }
+        state.state(State.Abort, expect);
         return false;
     }
 
     @Override
     public boolean abort(long xid) throws RemoteException {
+        try {
+            return end(xid, State.Abort);
+        } catch (IllegalTransactionStateException e) {
+            throw new RemoteException(e.getMessage());
+        }
+    }
+
+    private boolean end(long xid, State currentState) throws IllegalTransactionStateException {
         Queue<ResourceManager> rmList = xidRMMap.get(xid);
         StateCounter state = xidStateMap.get(xid);
         if (rmList == null || state == null) {
-            throw new InvalidTransactionException(xid, "no such xid to abort");
+            throw new InvalidTransactionException(xid, "no such xid to " + currentState);
         }
 
-        if (state.state != State.Abort) {
-            throw new InvalidTransactionException(xid, String.format("Illegal State: %s, for abort phase for %d", state, xid));
+        if (state.state != currentState) {
+            throw new IllegalTransactionStateException(xid, state.state, currentState.name());
         }
 
-        for (ResourceManager resourceManager : rmList) {
-            try {
-                resourceManager.abort(xid);
-                if (state.increaseAndCheck(rmList.size())) {
-                    state.state(State.Finish);
-                    return true;
-                }
-            } catch (RemoteException ignored) {
+        for (ResourceManager rm : rmList) {
+            if (end(xid, rm, state)) {
+                return true;
             }
         }
         return false;
     }
 
-    public void enlist(long xid, ResourceManager rm) throws RemoteException {
+    private boolean end(long xid, ResourceManager rm, StateCounter state) {
+        try {
+            if (state.state == State.Commit) {
+                rm.commit(xid);
+                Log.i("Commit for %d:%s", xid, state, rm.hostName());
+            } else {
+                rm.abort(xid);
+                Log.i("Abort for %d:%s", xid, state, rm.hostName());
+            }
+
+            if (state.increaseAndCheck()) {
+                state.state(State.Finish, 0);
+                return true;
+            }
+        } catch (Exception e) {
+            Log.e(e.getMessage());
+        }
+        return false;
+    }
+
+    public void enlist(long xid, ResourceManager rm) throws RemoteException, IllegalTransactionStateException {
         Queue<ResourceManager> rms = xidRMMap.get(xid);
         StateCounter state = xidStateMap.get(xid);
         if (rms == null || state == null) {
             throw new InvalidTransactionException(xid, "enlist no such xid:" + xid);
         }
-        if (state.state != State.Start) {
-            throw new InvalidTransactionException(xid, String.format("Illegal State: %s, for enlist %d", state.state, xid));
+        switch (state.state) {
+            case Start:
+                if (!rms.contains(rm)) {
+                    rms.add(rm);
+                }
+                return;
+            case Commit:
+            case Abort:
+                end(xid, rm, state);
+                return;
+            default:
+                throw new IllegalTransactionStateException(xid, state.state, "enlist");
         }
-        if (!rms.contains(rm)) {
-            rms.add(rm);
-        }
-    }
 
-    private enum State {
-        Start, Prepare, Commit, Abort, Finish
     }
 
     private class StateCounter implements Serializable {
         State state;
         AtomicInteger count;
+        int expect;
 
         StateCounter() {
             state = State.Start;
             count = new AtomicInteger(0);
         }
 
-        boolean increaseAndCheck(int limit) {
-            boolean result = count.incrementAndGet() >= limit;
+        boolean increaseAndCheck() {
+            boolean result = count.incrementAndGet() >= expect;
             storeLog();
             return result;
         }
 
-        void state(State state) {
+        void state(State state, int expect) {
+            this.expect = expect;
             this.state = state;
             count.set(0);
             storeLog();
@@ -227,6 +241,7 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
             return "StateCounter{" +
                     "state=" + state +
                     ", count=" + count +
+                    ", expect=" + expect +
                     '}';
         }
     }

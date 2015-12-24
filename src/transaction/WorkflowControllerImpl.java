@@ -3,6 +3,7 @@ package transaction;
 import lockmgr.DeadlockException;
 import transaction.bean.*;
 import transaction.exception.TransactionAbortedException;
+import transaction.exception.TransactionManagerUnaccessibleException;
 import util.Log;
 
 import java.rmi.RemoteException;
@@ -88,8 +89,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     @Override
     public boolean commit(long xid) throws RemoteException, TransactionAbortedException {
         Log.i("Commit Transaction: %d", xid);
-        tm().commit(xid);
-        return true;
+        return tm().commit(xid);
     }
 
     @Override
@@ -99,7 +99,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     }
 
     // ADMINISTRATIVE INTERFACE
-    private <K> boolean exist(ResourceManager<K> rm, long xid, K key) throws DeadlockException, RemoteException {
+    private <K> boolean exist(ResourceManager<K> rm, long xid, K key) throws DeadlockException, RemoteException, TransactionManagerUnaccessibleException {
         return rm.query(xid, key) != null;
     }
 
@@ -119,6 +119,8 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
                 throw new RuntimeException(e);
             }
             return rm.insert(xid, newItem);
+        } catch (TransactionManagerUnaccessibleException e) {
+            throw new RemoteException(e.getMessage());
         } catch (DeadlockException e) {
             throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
         }
@@ -145,6 +147,8 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
                 }
             }
             return flightRM.delete(xid, flightNum);
+        } catch (TransactionManagerUnaccessibleException e) {
+            throw new RemoteException(e.getMessage());
         } catch (DeadlockException e) {
             throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
         }
@@ -165,6 +169,8 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
             Hotel hotel = (Hotel) roomRM.query(xid, location);
             return !(hotel == null || hotel.numAvail() < numRooms) &&
                     roomRM.update(xid, location, new Hotel(hotel.location(), hotel.price(), hotel.numRooms(), hotel.numAvail() - numRooms));
+        } catch (TransactionManagerUnaccessibleException e) {
+            throw new RemoteException(e.getMessage());
         } catch (DeadlockException e) {
             throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
         }
@@ -185,6 +191,8 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
             Car car = (Car) carRM.query(xid, location);
             return !(car == null || car.numAvail() < numCars) &&
                     carRM.update(xid, location, new Car(car.location(), car.price(), car.numCars(), car.numAvail() - numCars));
+        } catch (TransactionManagerUnaccessibleException e) {
+            throw new RemoteException(e.getMessage());
         } catch (DeadlockException e) {
             throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
         }
@@ -198,6 +206,8 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         ResourceManager customerRM = rm(HostName.RMCustomers);
         try {
             return !exist(customerRM, xid, custName) && customerRM.insert(xid, new Customer(custName));
+        } catch (TransactionManagerUnaccessibleException e) {
+            throw new RemoteException(e.getMessage());
         } catch (DeadlockException e) {
             throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
         }
@@ -214,13 +224,15 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
             return exist(customerRM, xid, custName) &&
                     customerRM.delete(xid, custName) &&
                     reservationRM.delete(xid, "custName", custName) >= 0;
+        } catch (TransactionManagerUnaccessibleException e) {
+            throw new RemoteException(e.getMessage());
         } catch (DeadlockException e) {
             throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
         }
     }
 
     // QUERY INTERFACE
-    private <T> T get(long xid, String key, Class<? extends T> clazz, HostName who) throws RemoteException, TransactionAbortedException {
+    private <T> T get(long xid, String key, Class<? extends T> clazz, HostName who) throws RemoteException, TransactionAbortedException, TransactionManagerUnaccessibleException {
         if (key == null) {
             return null;
         }
@@ -233,37 +245,37 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     }
 
     @Override
-    public int queryFlight(long xid, String flightNum) throws RemoteException, TransactionAbortedException {
+    public int queryFlight(long xid, String flightNum) throws RemoteException, TransactionAbortedException, TransactionManagerUnaccessibleException {
         Flight flight = get(xid, flightNum, Flight.class, HostName.RMFlights);
         return flight == null ? -1 : flight.numAvail();
     }
 
     @Override
-    public int queryFlightPrice(long xid, String flightNum) throws RemoteException, TransactionAbortedException {
+    public int queryFlightPrice(long xid, String flightNum) throws RemoteException, TransactionAbortedException, TransactionManagerUnaccessibleException {
         Flight flight = get(xid, flightNum, Flight.class, HostName.RMFlights);
         return flight == null ? -1 : flight.price();
     }
 
     @Override
-    public int queryRooms(long xid, String location) throws RemoteException, TransactionAbortedException {
+    public int queryRooms(long xid, String location) throws RemoteException, TransactionAbortedException, TransactionManagerUnaccessibleException {
         Hotel hotel = get(xid, location, Hotel.class, HostName.RMRooms);
         return hotel == null ? -1 : hotel.numAvail();
     }
 
     @Override
-    public int queryRoomsPrice(long xid, String location) throws RemoteException, TransactionAbortedException {
+    public int queryRoomsPrice(long xid, String location) throws RemoteException, TransactionAbortedException, TransactionManagerUnaccessibleException {
         Hotel hotel = get(xid, location, Hotel.class, HostName.RMRooms);
         return hotel == null ? -1 : hotel.price();
     }
 
     @Override
-    public int queryCars(long xid, String location) throws RemoteException, TransactionAbortedException {
+    public int queryCars(long xid, String location) throws RemoteException, TransactionAbortedException, TransactionManagerUnaccessibleException {
         Car car = get(xid, location, Car.class, HostName.RMCars);
         return car == null ? -1 : car.numAvail();
     }
 
     @Override
-    public int queryCarsPrice(long xid, String location) throws RemoteException, TransactionAbortedException {
+    public int queryCarsPrice(long xid, String location) throws RemoteException, TransactionAbortedException, TransactionManagerUnaccessibleException {
         Car car = get(xid, location, Car.class, HostName.RMCars);
         return car == null ? -1 : car.price();
     }
@@ -301,6 +313,8 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
                 }
             }
             return result;
+        } catch (TransactionManagerUnaccessibleException e) {
+            throw new RemoteException(e.getMessage());
         } catch (DeadlockException e) {
             throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
         }
@@ -330,6 +344,8 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
                 throw new RuntimeException(e);
             }
             return rm.update(xid, key, newItem);
+        } catch (TransactionManagerUnaccessibleException e) {
+            throw new RemoteException(e.getMessage());
         } catch (DeadlockException e) {
             throw new TransactionAbortedException(xid, "Deadlock detected:" + e);
         }
@@ -353,6 +369,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     // TECHNICAL/TESTING INTERFACE
     @Override
     public boolean reconnect() throws RemoteException {
+        dieTime = DieTime.NO_DIE;
         if (!bind(HostName.RMCars) ||
                 !bind(HostName.RMFlights) ||
                 !bind(HostName.RMRooms) ||

@@ -47,14 +47,16 @@ public class LockManager {
 
         Queue<String> keys = tidKeyMap.get(tid);
         if (keys == null) {
-            tidKeyMap.put(tid, new ConcurrentLinkedQueue<String>());
-        } else if (!keys.contains(dataKey)) {
+            keys = new ConcurrentLinkedQueue<String>();
+            tidKeyMap.put(tid, keys);
+        }
+
+        if (!keys.contains(dataKey)) {
             keys.add(dataKey);
         }
 
-        printLockState();
-
         lockEntry.addTransaction(tid, lockType);
+        printLockState();
         return true;
     }
 
@@ -83,6 +85,9 @@ public class LockManager {
                     iterator.remove();
                 }
             }
+        }
+        if (keys.isEmpty()) {
+            tidKeyMap.remove(tid);
         }
 
         printLockState();
@@ -138,9 +143,12 @@ public class LockManager {
                 Queue<String> keys = tidKeyMap.get(tid);
                 if (keys != null) {
                     keys.remove(key);
-                    printLockState();
+                    if (keys.isEmpty()) {
+                        tidKeyMap.remove(tid);
+                    }
                 }
             }
+            printLockState();
         }
 
         void pend() {

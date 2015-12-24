@@ -3,7 +3,6 @@ package test;
 import transaction.Host;
 import transaction.WorkflowController;
 
-import java.io.File;
 import java.io.FileInputStream;
 import java.rmi.Naming;
 import java.util.Properties;
@@ -44,6 +43,7 @@ public abstract class BaseClient {
             System.out.println("[Pass]" + test);
         } else {
             System.err.println("[Fail]" + test);
+            System.exit(1);
         }
     }
 
@@ -52,6 +52,7 @@ public abstract class BaseClient {
             System.out.println("[Pass]" + test);
         } else {
             System.err.printf("[Fail]%s: expect %d, actual %d\n", test, expect, actual);
+            System.exit(1);
         }
     }
 
@@ -60,35 +61,12 @@ public abstract class BaseClient {
             setUp();
             long xid = wc().start();
             run(xid);
-            assertTrue("Commit", wc().commit(xid));
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    private void setUp() {
-        delete(new File("tm.log"));
-        delete(new File("RMCars"));
-        delete(new File("RMCustomers"));
-        delete(new File("RMFlights"));
-        delete(new File("RMReservations"));
-        delete(new File("RMRooms"));
-    }
-
-    private void delete(File file) {
-        if (file.exists()) {
-            if (file.isFile()) {
-                file.delete();
-            } else if (file.isDirectory()) {
-                File[] files = file.listFiles();
-                if (files != null) {
-                    for (File file1 : files) {
-                        delete(file1);
-                    }
-                }
-                file.delete();
-            }
-        }
+    protected void setUp() throws Exception {
     }
 
     protected abstract void run(long xid) throws Exception;
