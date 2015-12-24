@@ -41,12 +41,16 @@ public class LockManager {
         LockEntry lockEntry = keyLockEntryMap.get(dataKey);
         if (lockEntry == null) {
             lockEntry = new LockEntry(dataKey);
+            keyLockEntryMap.put(dataKey, lockEntry);
         }
-        keyLockEntryMap.put(dataKey, lockEntry);
         monitorThread.wake();
 
-        tidKeyMap.putIfAbsent(tid, new ConcurrentLinkedQueue<String>());
-        tidKeyMap.get(tid).add(dataKey);
+        Queue<String> keys = tidKeyMap.get(tid);
+        if (keys == null) {
+            tidKeyMap.put(tid, new ConcurrentLinkedQueue<String>());
+        } else if (!keys.contains(dataKey)) {
+            keys.add(dataKey);
+        }
 
         printLockState();
 
@@ -110,6 +114,7 @@ public class LockManager {
                         throw new IllegalStateException("no lock entry for key:" + key);
                     }
                     long deadlockRemaining = earliestLockEntry.deadlockRemaining();
+                    Log.i("[%s]deadlock Remaining:%dms", key, deadlockRemaining);
                     if (deadlockRemaining <= 0) {
                         handleLockTimeout(key, earliestLockEntry);
                     } else {
@@ -119,6 +124,8 @@ public class LockManager {
                         }
                     }
                 } else {
+                    Log.i("pend");
+                    printLockState();
                     pend();
                 }
             }
