@@ -333,15 +333,18 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         }
     }
 
+    private void checkDie(DieTime dieTime) throws RemoteException {
+        if (this.dieTime.alreadyDied(dieTime)) {
+            throw new ResourceManagerUnaccessibleException(myRMIName);
+        }
+        if (this.dieTime == dieTime) {
+            dieNow();
+        }
+    }
+
     @Override
     public boolean prepare(long xid) throws RemoteException {
-        if (dieTime.alreadyDied(DieTime.BEFORE_PREPARE)) {
-            throw new ResourceManagerUnaccessibleException(myRMIName);
-        }
-        if (dieTime == DieTime.BEFORE_PREPARE) {
-            dieNow();
-            throw new ResourceManagerUnaccessibleException(myRMIName);
-        }
+        checkDie(DieTime.BEFORE_PREPARE);
         if (xid < 0) {
             throw new InvalidTransactionException(xid, "Xid must be positive.");
         }
@@ -357,23 +360,13 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
 
     @Override
     public void commit(long xid) throws RemoteException {
-        if (dieTime.alreadyDied(DieTime.BEFORE_COMMIT)) {
-            throw new ResourceManagerUnaccessibleException(myRMIName);
-        }
-        if (dieTime == DieTime.BEFORE_COMMIT) {
-            dieNow();
-        }
+        checkDie(DieTime.BEFORE_COMMIT);
         end(xid, true);
     }
 
     @Override
     public void abort(long xid) throws RemoteException {
-        if (dieTime.alreadyDied(DieTime.BEFORE_ABORT)) {
-            throw new ResourceManagerUnaccessibleException(myRMIName);
-        }
-        if (dieTime == DieTime.BEFORE_ABORT) {
-            dieNow();
-        }
+        checkDie(DieTime.BEFORE_ABORT);
         end(xid, false);
     }
 
