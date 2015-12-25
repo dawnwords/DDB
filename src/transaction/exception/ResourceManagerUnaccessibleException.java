@@ -14,8 +14,8 @@ import transaction.Host;
  *         TODO To change the template for this generated type comment go to
  *         Window - Preferences - Java - Code Style - Code Templates
  */
-public class ResourceManagerUnaccessibleException extends Exception {
+public class ResourceManagerUnaccessibleException extends UnaccessibleException {
     public ResourceManagerUnaccessibleException(Host.HostName rm) {
-        super(rm.name());
+        super(rm);
     }
 }

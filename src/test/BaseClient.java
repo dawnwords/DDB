@@ -56,18 +56,5 @@ public abstract class BaseClient {
         }
     }
 
-    public void run() {
-        try {
-            setUp();
-            long xid = wc().start();
-            run(xid);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    protected void setUp() throws Exception {
-    }
-
-    protected abstract void run(long xid) throws Exception;
+    public abstract void test();
 }

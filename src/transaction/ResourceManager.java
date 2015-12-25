@@ -3,8 +3,6 @@ package transaction;
 import lockmgr.DeadlockException;
 import transaction.bean.ResourceItem;
 import transaction.exception.InvalidIndexException;
-import transaction.exception.ResourceManagerUnaccessibleException;
-import transaction.exception.TransactionManagerUnaccessibleException;
 
 import java.rmi.RemoteException;
 import java.util.List;
@@ -28,25 +26,25 @@ public interface ResourceManager<K> extends Remote {
 
     String getID() throws RemoteException;
 
-    List<ResourceItem<K>> query(long xid) throws DeadlockException, RemoteException, TransactionManagerUnaccessibleException;
+    List<ResourceItem<K>> query(long xid) throws DeadlockException, RemoteException;
 
-    ResourceItem<K> query(long xid, K key) throws DeadlockException, RemoteException, TransactionManagerUnaccessibleException;
+    ResourceItem<K> query(long xid, K key) throws DeadlockException, RemoteException;
 
-    List<ResourceItem<K>> query(long xid, String indexName, Object indexVal) throws DeadlockException, InvalidIndexException, RemoteException, TransactionManagerUnaccessibleException;
+    List<ResourceItem<K>> query(long xid, String indexName, Object indexVal) throws DeadlockException, RemoteException;
 
-    boolean update(long xid, K key, ResourceItem<K> newItem) throws DeadlockException, RemoteException, TransactionManagerUnaccessibleException;
+    boolean update(long xid, K key, ResourceItem<K> newItem) throws DeadlockException, RemoteException;
 
-    boolean insert(long xid, ResourceItem<K> newItem) throws DeadlockException, RemoteException, TransactionManagerUnaccessibleException;
+    boolean insert(long xid, ResourceItem<K> newItem) throws DeadlockException, RemoteException;
 
-    boolean delete(long xid, K key) throws DeadlockException, RemoteException, TransactionManagerUnaccessibleException;
+    boolean delete(long xid, K key) throws DeadlockException, RemoteException;
 
-    int delete(long xid, String indexName, Object indexVal) throws DeadlockException, InvalidIndexException, RemoteException, TransactionManagerUnaccessibleException;
+    int delete(long xid, String indexName, Object indexVal) throws DeadlockException, InvalidIndexException, RemoteException;
 
-    boolean prepare(long xid) throws RemoteException, ResourceManagerUnaccessibleException;
+    boolean prepare(long xid) throws RemoteException;
 
-    void commit(long xid) throws RemoteException, ResourceManagerUnaccessibleException;
+    void commit(long xid) throws RemoteException;
 
-    void abort(long xid) throws RemoteException, ResourceManagerUnaccessibleException;
+    void abort(long xid) throws RemoteException;
 
     void ping() throws RemoteException;
 

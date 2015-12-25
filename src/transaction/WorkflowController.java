@@ -189,39 +189,38 @@ public interface WorkflowController extends Remote {
      * @param flightNum flight number.
      * @return # empty seats on the flight. (-1 if flightNum==null or doesn't exist)
      * @throws RemoteException             on communications failure.
-     * @throws TransactionAbortedException if transaction was aborted.
      * @throws InvalidTransactionException if transaction id is invalid.
      */
-    int queryFlight(long xid, String flightNum) throws RemoteException, TransactionAbortedException, TransactionManagerUnaccessibleException;
+    int queryFlight(long xid, String flightNum) throws RemoteException;
 
     /**
      * Return the price of a seat on this flight. Return -1 if flightNum==null or doesn't exist.
      */
-    int queryFlightPrice(long xid, String flightNum) throws RemoteException, TransactionAbortedException, TransactionManagerUnaccessibleException;
+    int queryFlightPrice(long xid, String flightNum) throws RemoteException;
 
     /**
      * Return the number of rooms available at a location.
      */
-    int queryRooms(long xid, String location) throws RemoteException, TransactionAbortedException, TransactionManagerUnaccessibleException;
+    int queryRooms(long xid, String location) throws RemoteException;
 
     /**
      * Return the price of rooms at this location.
      */
-    int queryRoomsPrice(long xid, String location) throws RemoteException, TransactionAbortedException, TransactionManagerUnaccessibleException;
+    int queryRoomsPrice(long xid, String location) throws RemoteException;
 
     /**
      * Return the number of cars available at a location.
      */
-    int queryCars(long xid, String location) throws RemoteException, TransactionAbortedException, TransactionManagerUnaccessibleException;
+    int queryCars(long xid, String location) throws RemoteException;
 
     /**
      * Return the price of rental cars at this location.
      */
-    int queryCarsPrice(long xid, String location) throws RemoteException, TransactionAbortedException, TransactionManagerUnaccessibleException;
+    int queryCarsPrice(long xid, String location) throws RemoteException;
 
 
     /* Return the total price of all reservations held for a customer. Return -1 if custName==null or doesn't exist.*/
-    int queryCustomerBill(long xid, String custName) throws RemoteException, TransactionAbortedException;
+    int queryCustomerBill(long xid, String custName) throws RemoteException;
 
     //////////
     // RESERVATION INTERFACE
