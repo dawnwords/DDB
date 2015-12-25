@@ -101,15 +101,11 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
             dieNow();
         }
         if (prepare(xid)) {
-            if (end(xid, State.Commit)) {
-                if (dieTime == DieTime.AFTER_COMMIT) {
-                    dieNow();
-                }
-                return true;
-            } else {
-                end(xid, State.Abort);
-                throw new TransactionAbortedException(xid, "Commit Failed");
+            end(xid, State.Commit);
+            if (dieTime == DieTime.AFTER_COMMIT) {
+                dieNow();
             }
+            return true;
         } else {
             end(xid, State.Abort);
             throw new TransactionAbortedException(xid, "Prepare Failed");
