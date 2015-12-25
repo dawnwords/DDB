@@ -9,7 +9,7 @@ import java.util.Date;
 public class Log {
 
     private static final SimpleDateFormat FORMAT = new SimpleDateFormat("HH:mm:ss SSS");
-    private static boolean DEBUG = Boolean.valueOf(System.getProperty("log.debug", "false"));
+    private static boolean DEBUG = Boolean.valueOf(System.getProperty("log.debug", "true"));
 
     public static void i(String format, Object... args) {
         if (DEBUG) {
@@ -19,6 +19,12 @@ public class Log {
 
     public static void e(String format, Object... args) {
         System.err.println(format(format, args));
+    }
+
+    public static void iln() {
+        if (DEBUG) {
+            System.out.println();
+        }
     }
 
     private static String format(String format, Object... args) {

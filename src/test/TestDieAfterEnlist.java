@@ -14,7 +14,7 @@ public class TestDieAfterEnlist extends BaseClient {
 
 
     @Override
-    public void test() {
+    public void run() {
         try {
             wc().dieRMAfterEnlist(Host.HostName.RMReservations);
             long xid = wc().start();

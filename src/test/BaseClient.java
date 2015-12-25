@@ -2,7 +2,10 @@ package test;
 
 import transaction.Host;
 import transaction.WorkflowController;
+import util.IOUtil;
+import util.Log;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.rmi.Naming;
 import java.util.Properties;
@@ -56,5 +59,26 @@ public abstract class BaseClient {
         }
     }
 
-    public abstract void test();
+    public void test() {
+        run();
+        Log.iln();
+        Log.i("[Table & Logs]");
+
+        File dir = new File(".");
+        for (File file : dir.listFiles()) {
+            if (file.isDirectory() && file.getName().startsWith("RM")) {
+                Log.i(file.getName());
+                for (File log : file.listFiles()) {
+                    if (log.isFile()) {
+                        Object o = IOUtil.readObject(log.getAbsolutePath());
+                        if (o != null) {
+                            Log.i("%s->%s", o.getClass().getSimpleName(), o);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    protected abstract void run();
 }

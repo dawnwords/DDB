@@ -11,7 +11,7 @@ public class Client extends BaseClient {
     }
 
     @Override
-    public void test() {
+    public void run() {
         try {
             long xid = wc().start();
             assertTrue("Add flight", wc().addFlight(xid, "347", 230, 999));
