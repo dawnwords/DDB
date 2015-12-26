@@ -459,10 +459,14 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
                 Log.i(myRMIName + "'s xids is Empty ? " + xids.isEmpty());
                 for (Long xid : xids) {
                     Log.i(myRMIName + " Re-enlist to TM with xid " + xid);
-                    tm.enlist(xid, ResourceManagerImpl.this);
-                    if (dieTime == DieTime.AFTER_ENLIST) {
-                        dieNow();
+                    try {
+                        tm.enlist(xid, ResourceManagerImpl.this);
+                    } catch (InvalidTransactionException e) {
+                        end(xid, false);
                     }
+                }
+                if (dieTime == DieTime.AFTER_ENLIST) {
+                    dieNow();
                 }
                 Log.i(myRMIName + " bound to TM");
                 tmFailed = false;

@@ -13,7 +13,7 @@ import java.util.Properties;
 /**
  * Created by Dawnwords on 2015/12/24.
  */
-public abstract class BaseClient {
+public abstract class TestClient {
     private WorkflowController wc;
 
     protected WorkflowController wc() {

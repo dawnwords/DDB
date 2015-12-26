@@ -444,9 +444,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     private boolean dieNow(Remote host) {
         try {
             host.dieNow();
-        } catch (RemoteException e) {
-            e.printStackTrace();
-            return false;
+        } catch (RemoteException ignored) {
         }
         return true;
     }

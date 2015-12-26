@@ -4,7 +4,7 @@ package test;
  * A toy client of the Distributed Travel Reservation System.
  */
 
-public class Client extends BaseClient {
+public class Client extends TestClient {
 
     public static void main(String args[]) {
         new Client().test();

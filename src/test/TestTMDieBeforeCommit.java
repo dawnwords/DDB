@@ -5,7 +5,7 @@ import java.rmi.RemoteException;
 /**
  * Created by Dawnwords on 2015/12/25.
  */
-public class TestTMDieBeforeCommit extends BaseClient {
+public class TestTMDieBeforeCommit extends TestClient {
     public static void main(String[] args) {
         new TestTMDieBeforeCommit().test();
     }

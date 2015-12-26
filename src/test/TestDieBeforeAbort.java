@@ -5,7 +5,7 @@ import transaction.Host;
 /**
  * Created by Dawnwords on 2015/12/25.
  */
-public class TestDieBeforeAbort extends BaseClient {
+public class TestDieBeforeAbort extends TestClient {
     public static void main(String[] args) {
         new TestDieBeforeAbort().test();
     }

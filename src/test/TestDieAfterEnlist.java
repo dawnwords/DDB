@@ -6,7 +6,7 @@ import transaction.exception.TransactionAbortedException;
 /**
  * Created by Dawnwords on 2015/12/24.
  */
-public class TestDieAfterEnlist extends BaseClient {
+public class TestDieAfterEnlist extends TestClient {
 
     public static void main(String[] args) {
         new TestDieAfterEnlist().test();
