@@ -131,6 +131,7 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
             throw new InvalidTransactionException(xid, "no such xid to prepare to commit");
         }
 
+        // prepare can be only invoked when current state is Start
         if (state.state != State.Start) {
             return false;
         }
@@ -145,7 +146,7 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
                 prepare = rm.prepare(xid);
                 hostName = rm.hostName();
             } catch (RemoteException e) {
-                break;
+                break;  // rm failed
             }
             if (prepare) {
                 Log.i("Prepare for %d:[%s]%s", xid, state, hostName);
@@ -153,6 +154,7 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
                     if (dieTime == DieTime.BEFORE_COMMIT) {
                         dieNow();
                     }
+                    // all RMs get prepared, set state to Commit
                     state.state(State.Commit, expect);
                     if (dieTime == DieTime.AFTER_COMMIT) {
                         dieNow();
@@ -160,9 +162,10 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
                     return true;
                 }
             } else {
-                break;
+                break; // rm not prepared
             }
         }
+        // if any RM failed or did not get prepared, set state to Abort
         state.state(State.Abort, expect);
         return false;
     }
@@ -179,6 +182,40 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
         }
         state.state(State.Abort, rmList.size());
         return end(xid, State.Abort);
+    }
+
+    @Override
+    public void enlist(long xid, ResourceManager rm) throws RemoteException, IllegalTransactionStateException {
+        ping();
+        recoverLock.readLock().lock();
+        Queue<ResourceManager> rms = xidRMMap.get(xid);
+        StateCounter state = xidStateMap.get(xid);
+        recoverLock.readLock().unlock();
+        if (rms == null || state == null) {
+            throw new InvalidTransactionException(xid, "enlist no such xid:" + xid);
+        }
+        Log.i("Enlist for %d: rm:%s, state:%s", xid, rm.hostName(), state);
+        switch (state.state) {
+            case Start:
+                // normal case: add rm into involved queue
+                if (!rms.contains(rm)) {
+                    rms.add(rm);
+                }
+                return;
+            case Prepare:
+                // tm recovers from dieing before commit: check state
+                // if all RMs involved get ready to commit, roll forward to commit
+                // otherwise, roll backward to abort
+                state.updatePrepare();
+            case Commit:
+            case Abort:
+                // rm dies before commit/abort
+                end(xid, rm, state);
+                return;
+            default:
+                throw new IllegalTransactionStateException(xid, state.state, "enlist");
+        }
+
     }
 
     private boolean end(long xid, State currentState) {
@@ -221,35 +258,6 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
             Log.e(e.getMessage());
         }
         return false;
-    }
-
-    @Override
-    public void enlist(long xid, ResourceManager rm) throws RemoteException, IllegalTransactionStateException {
-        ping();
-        recoverLock.readLock().lock();
-        Queue<ResourceManager> rms = xidRMMap.get(xid);
-        StateCounter state = xidStateMap.get(xid);
-        recoverLock.readLock().unlock();
-        if (rms == null || state == null) {
-            throw new InvalidTransactionException(xid, "enlist no such xid:" + xid);
-        }
-        Log.i("Enlist for %d: rm:%s, state:%s", xid, rm.hostName(), state);
-        switch (state.state) {
-            case Start:
-                if (!rms.contains(rm)) {
-                    rms.add(rm);
-                }
-                return;
-            case Prepare:
-                state.updatePrepare();
-            case Commit:
-            case Abort:
-                end(xid, rm, state);
-                return;
-            default:
-                throw new IllegalTransactionStateException(xid, state.state, "enlist");
-        }
-
     }
 
     private class StateCounter implements Serializable {
