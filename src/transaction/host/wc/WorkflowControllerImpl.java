@@ -3,6 +3,7 @@ package transaction.host.wc;
 import lockmgr.DeadlockException;
 import transaction.bean.*;
 import transaction.core.*;
+import transaction.exception.InvalidTransactionException;
 import transaction.exception.TransactionAbortedException;
 import transaction.exception.UnaccessibleException;
 import util.Log;
@@ -74,11 +75,9 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         return (ResourceManager<K>) hostMap.get(who);
     }
 
-    private TransactionManager tm() {
-        return (TransactionManager) hostMap.get(HostName.TM);
-    }
-
-    // TRANSACTION INTERFACE
+    /*
+     * Interfaces of transaction
+     */
     @Override
     public long start() throws RemoteException {
         long xid = xidCounter.getAndIncrement();
@@ -99,7 +98,13 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         tm().abort(xid);
     }
 
-    // ADMINISTRATIVE INTERFACE
+    private TransactionManager tm() {
+        return (TransactionManager) hostMap.get(HostName.TM);
+    }
+
+    /*
+     * Interfaces of adding new ResourceItem
+     */
     private <K> boolean exist(ResourceManager<K> rm, long xid, K key) throws DeadlockException, RemoteException {
         return rm.query(xid, key) != null;
     }
@@ -115,6 +120,37 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         }
     }
 
+    @Override
+    public boolean addFlight(long xid, String flightNum, int numSeats, int price) throws RemoteException, TransactionAbortedException {
+        return add(xid, flightNum, numSeats, price, Flight.class, HostName.RMFlights);
+    }
+
+    @Override
+    public boolean addRooms(long xid, String location, int numRooms, int price) throws RemoteException, TransactionAbortedException {
+        return add(xid, location, numRooms, price, Hotel.class, HostName.RMRooms);
+    }
+
+    @Override
+    public boolean addCars(long xid, String location, int numCars, int price) throws RemoteException, TransactionAbortedException {
+        return add(xid, location, numCars, price, Car.class, HostName.RMCars);
+    }
+
+    /**
+     * Base Add Method
+     * use java reflection to construct an ResourceItem with constructor of (key, price, number, remaining)
+     *
+     * @param xid   transaction id
+     * @param key   key of ResourceItem to add
+     * @param num   num field of ResourceItem to add
+     * @param price price field of ResourceItem to add
+     * @param clazz class of ResourceItem to add
+     * @param who   to which RM
+     * @param <T>   type of  ResourceItem to add
+     * @return true if add successfully
+     * @throws RemoteException             on communications failure.
+     * @throws TransactionAbortedException if transaction was aborted.
+     * @throws InvalidTransactionException if transaction id is invalid.
+     */
     private <T extends ResourceItem<String>> boolean add(long xid, String key, int num, int price, Class<T> clazz, HostName who) throws RemoteException, TransactionAbortedException {
         if (key == null || num < 0 || price < 0) {
             return false;
@@ -138,10 +174,22 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     }
 
     @Override
-    public boolean addFlight(long xid, String flightNum, int numSeats, int price) throws RemoteException, TransactionAbortedException {
-        return add(xid, flightNum, numSeats, price, Flight.class, HostName.RMFlights);
+    public boolean newCustomer(long xid, String custName) throws RemoteException, TransactionAbortedException {
+        if (custName == null) {
+            return false;
+        }
+        ResourceManager customerRM = rm(HostName.RMCustomers);
+        try {
+            return !exist(customerRM, xid, custName) && customerRM.insert(xid, new Customer(custName));
+        } catch (Exception e) {
+            abortForRMException(xid, e);
+        }
+        return false;
     }
 
+    /*
+     * Interfaces of deleting a ResourceItem
+     */
     @Override
     public boolean deleteFlight(long xid, String flightNum) throws RemoteException, TransactionAbortedException {
         if (flightNum == null) {
@@ -165,11 +213,6 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     }
 
     @Override
-    public boolean addRooms(long xid, String location, int numRooms, int price) throws RemoteException, TransactionAbortedException {
-        return add(xid, location, numRooms, price, Hotel.class, HostName.RMRooms);
-    }
-
-    @Override
     public boolean deleteRooms(long xid, String location, int numRooms) throws RemoteException, TransactionAbortedException {
         if (location == null || numRooms < 0) {
             return false;
@@ -186,11 +229,6 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
     }
 
     @Override
-    public boolean addCars(long xid, String location, int numCars, int price) throws RemoteException, TransactionAbortedException {
-        return add(xid, location, numCars, price, Car.class, HostName.RMCars);
-    }
-
-    @Override
     public boolean deleteCars(long xid, String location, int numCars) throws RemoteException, TransactionAbortedException {
         if (location == null || numCars < 0) {
             return false;
@@ -200,20 +238,6 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
             Car car = (Car) carRM.query(xid, location);
             return !(car == null || car.numAvail() < numCars) &&
                     carRM.update(xid, location, new Car(car.location(), car.price(), car.numCars(), car.numAvail() - numCars));
-        } catch (Exception e) {
-            abortForRMException(xid, e);
-        }
-        return false;
-    }
-
-    @Override
-    public boolean newCustomer(long xid, String custName) throws RemoteException, TransactionAbortedException {
-        if (custName == null) {
-            return false;
-        }
-        ResourceManager customerRM = rm(HostName.RMCustomers);
-        try {
-            return !exist(customerRM, xid, custName) && customerRM.insert(xid, new Customer(custName));
         } catch (Exception e) {
             abortForRMException(xid, e);
         }
@@ -237,19 +261,9 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         return false;
     }
 
-    // QUERY INTERFACE
-    private <T> T get(long xid, String key, Class<? extends T> clazz, HostName who) throws RemoteException {
-        if (key == null) {
-            return null;
-        }
-        ResourceManager rm = rm(who);
-        try {
-            return clazz.cast(rm.query(xid, key));
-        } catch (DeadlockException e) {
-            throw new RemoteException(String.format("Deadlock detected for %d:%s", xid, e));
-        }
-    }
-
+    /*
+     * Interfaces of Querying
+     */
     @Override
     public int queryFlight(long xid, String flightNum) throws RemoteException {
         Flight flight = get(xid, flightNum, Flight.class, HostName.RMFlights);
@@ -286,6 +300,30 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         return car == null ? -1 : car.price();
     }
 
+    /**
+     * Base Query Method
+     *
+     * @param xid   transaction id
+     * @param key   key of ResourceItem to query
+     * @param clazz class of ResourceItem to query
+     * @param who   to which RM
+     * @param <T>   type of ResourceItem to query
+     * @return query result
+     * @throws RemoteException             on communications failure.
+     * @throws InvalidTransactionException if transaction id is invalid.
+     */
+    private <T> T get(long xid, String key, Class<? extends T> clazz, HostName who) throws RemoteException {
+        if (key == null) {
+            return null;
+        }
+        ResourceManager rm = rm(who);
+        try {
+            return clazz.cast(rm.query(xid, key));
+        } catch (DeadlockException e) {
+            throw new RemoteException(String.format("Deadlock detected for %d:%s", xid, e));
+        }
+    }
+
     @Override
     public int queryCustomerBill(long xid, String custName) throws RemoteException {
         if (custName == null) {
@@ -297,7 +335,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         ResourceManager flightRM = rm(HostName.RMFlights);
         ResourceManager customerRM = rm(HostName.RMCustomers);
         try {
-            if(customerRM.query(xid, custName) == null) {
+            if (customerRM.query(xid, custName) == null) {
                 return -1;
             }
             List<ResourceItem<ReservationKey>> reservations = reservationRM.query(xid, "custName", custName);
@@ -328,8 +366,40 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         }
     }
 
+    /*
+     * Interfaces of Reservation
+     */
+    @Override
+    public boolean reserveFlight(long xid, String custName, String flightNum) throws RemoteException, TransactionAbortedException {
+        return reserve(xid, custName, flightNum, Flight.class, ReservationType.FLIGHT, HostName.RMFlights);
+    }
 
-    // RESERVATION INTERFACE
+    @Override
+    public boolean reserveCar(long xid, String custName, String location) throws RemoteException, TransactionAbortedException {
+        return reserve(xid, custName, location, Car.class, ReservationType.CAR, HostName.RMCars);
+    }
+
+    @Override
+    public boolean reserveRoom(long xid, String custName, String location) throws RemoteException, TransactionAbortedException {
+        return reserve(xid, custName, location, Hotel.class, ReservationType.HOTEL, HostName.RMRooms);
+    }
+
+    /**
+     * Base Reserve Method
+     * use java reflection to decrease the remaining number of an ResourceItem
+     *
+     * @param xid      transaction id
+     * @param custName customer Name
+     * @param key      key of ResourceItem to reserve
+     * @param clazz    class of ResourceItem to reserve
+     * @param type     Reservation Type
+     * @param who      to which RM
+     * @param <T>      type of  ResourceItem to reserve
+     * @return true if add successfully
+     * @throws RemoteException             on communications failure.
+     * @throws TransactionAbortedException if transaction was aborted.
+     * @throws InvalidTransactionException if transaction id is invalid.
+     */
     private <T extends ResourceItem<String>> boolean reserve(long xid, String custName, String key, Class<T> clazz, ReservationType type, HostName who) throws RemoteException, TransactionAbortedException {
         if (custName == null || key == null) {
             return false;
@@ -358,22 +428,9 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         return false;
     }
 
-    @Override
-    public boolean reserveFlight(long xid, String custName, String flightNum) throws RemoteException, TransactionAbortedException {
-        return reserve(xid, custName, flightNum, Flight.class, ReservationType.FLIGHT, HostName.RMFlights);
-    }
-
-    @Override
-    public boolean reserveCar(long xid, String custName, String location) throws RemoteException, TransactionAbortedException {
-        return reserve(xid, custName, location, Car.class, ReservationType.CAR, HostName.RMCars);
-    }
-
-    @Override
-    public boolean reserveRoom(long xid, String custName, String location) throws RemoteException, TransactionAbortedException {
-        return reserve(xid, custName, location, Hotel.class, ReservationType.HOTEL, HostName.RMRooms);
-    }
-
-    // TECHNICAL/TESTING INTERFACE
+    /*
+     * Interfaces of Testing
+     */
     @Override
     public boolean reconnect() throws RemoteException {
         dieTime = DieTime.NO_DIE;
