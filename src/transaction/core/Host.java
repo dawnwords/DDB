@@ -13,6 +13,9 @@ import java.rmi.server.UnicastRemoteObject;
 import java.util.Properties;
 
 /**
+ * This abstract class gives the default implementations of <code>ping()</code>, <code>setDateTime()</code>,
+ * and <code>hostName()</code>, as well as some common functions for hosts, i.e. RMs, TM and WC
+ * <p/>
  * Created by Dawnwords on 2015/12/18.
  */
 public abstract class Host extends UnicastRemoteObject {
@@ -23,6 +26,14 @@ public abstract class Host extends UnicastRemoteObject {
     protected Host(HostName rmiName) throws RemoteException {
         dieTime = DieTime.NO_DIE;
         myRMIName = rmiName;
+    }
+
+    public void ping() throws RemoteException {
+        if (hasDead) {
+            throw myRMIName == HostName.TM ?
+                    new TransactionManagerUnaccessibleException() :
+                    new ResourceManagerUnaccessibleException(myRMIName);
+        }
     }
 
     public void setDieTime(DieTime dieTime) throws RemoteException {
@@ -75,14 +86,9 @@ public abstract class Host extends UnicastRemoteObject {
         return prop;
     }
 
-    public void ping() throws RemoteException {
-        if (hasDead) {
-            throw myRMIName == HostName.TM ?
-                    new TransactionManagerUnaccessibleException() :
-                    new ResourceManagerUnaccessibleException(myRMIName);
-        }
-    }
-
+    /**
+     * The Host Name Enumerator for RMs, TM, and WC
+     */
     public enum HostName {
         RMFlights("rm.RMFlights"),
         RMRooms("rm.RMRooms"),
