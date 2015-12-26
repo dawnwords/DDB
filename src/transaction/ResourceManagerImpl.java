@@ -454,7 +454,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
                 tm = (TransactionManager) lookUp(HostName.TM);
                 Log.i(myRMIName + "'s xids is Empty ? " + xids.isEmpty());
                 for (Long xid : xids) {
-                    Log.i(myRMIName + " Re-enlist to TM with xid" + xid);
+                    Log.i(myRMIName + " Re-enlist to TM with xid " + xid);
                     tm.enlist(xid, ResourceManagerImpl.this);
                     if (dieTime == DieTime.AFTER_ENLIST) {
                         dieNow();

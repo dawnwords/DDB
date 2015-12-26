@@ -26,11 +26,13 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
     public static final String TM_LOG_FILE_NAME = "tm.log";
     private ConcurrentHashMap<Long, Queue<ResourceManager>> xidRMMap;
     private ConcurrentHashMap<Long, StateCounter> xidStateMap;
-    private ReentrantReadWriteLock logLock;
+    private ReentrantReadWriteLock logLock, recoverLock;
+    private volatile boolean hasDead;
 
     protected TransactionManagerImpl() throws RemoteException {
         super(HostName.TM);
         logLock = new ReentrantReadWriteLock();
+        recoverLock = new ReentrantReadWriteLock();
     }
 
     public static void main(String args[]) {
@@ -47,6 +49,7 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
     }
 
     private void recover() {
+        recoverLock.writeLock().lock();
         xidStateMap = loadLog();
         if (xidStateMap == null) {
             xidStateMap = new ConcurrentHashMap<Long, StateCounter>();
@@ -55,6 +58,8 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
         for (Long xid : xidStateMap.keySet()) {
             xidRMMap.put(xid, new ConcurrentLinkedQueue<ResourceManager>());
         }
+        Log.i("TM Finish Recover:%s", xidStateMap);
+        recoverLock.writeLock().unlock();
     }
 
     private ConcurrentHashMap<Long, StateCounter> loadLog() {
@@ -71,9 +76,20 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
     }
 
     @Override
+    public void ping() throws RemoteException {
+        if (hasDead) {
+            throw new TransactionManagerUnaccessibleException();
+        }
+    }
+
+    @Override
     public boolean dieNow() throws RemoteException {
+        hasDead = true;
+        recoverLock.writeLock().lock();
         xidRMMap.clear();
         xidStateMap.clear();
+        recoverLock.writeLock().unlock();
+        Log.i("TM Died");
         throw new TransactionManagerUnaccessibleException();
     }
 
@@ -81,40 +97,38 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
     public boolean reconnect() throws RemoteException {
         dieTime = DieTime.NO_DIE;
         recover();
+        hasDead = false;
         return true;
     }
 
     @Override
     public boolean start(long xid) throws RemoteException {
+        recoverLock.writeLock().lock();
         if (xidStateMap.get(xid) != null) {
             return false;
         }
         xidRMMap.put(xid, new ConcurrentLinkedQueue<ResourceManager>());
         xidStateMap.put(xid, new StateCounter());
-        Log.i("start:%s", xidStateMap);
+        recoverLock.writeLock().unlock();
+        Log.i("Start:%s", xidStateMap);
         return true;
     }
 
     @Override
     public boolean commit(long xid) throws RemoteException, TransactionAbortedException {
-        if (dieTime == DieTime.BEFORE_COMMIT) {
-            dieNow();
-        }
         if (prepare(xid)) {
-            end(xid, State.Commit);
-            if (dieTime == DieTime.AFTER_COMMIT) {
-                dieNow();
-            }
-            return true;
+            return end(xid, State.Commit);
         } else {
             end(xid, State.Abort);
             throw new TransactionAbortedException(xid, "Prepare Failed");
         }
     }
 
-    private boolean prepare(long xid) {
+    private boolean prepare(long xid) throws RemoteException {
+        recoverLock.readLock().lock();
         Queue<ResourceManager> rmList = xidRMMap.get(xid);
         StateCounter state = xidStateMap.get(xid);
+        recoverLock.readLock().unlock();
         if (rmList == null || state == null) {
             throw new InvalidTransactionException(xid, "no such xid to prepare to commit");
         }
@@ -125,17 +139,31 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
 
         int expect = rmList.size();
         state.state(State.Prepare, expect);
-        try {
-            for (ResourceManager resourceManager : rmList) {
-                if (resourceManager.prepare(xid)) {
-                    Log.i("Prepare for %d:[%s]%s", xid, state, resourceManager.hostName());
-                    if (state.increaseAndCheck()) {
-                        state.state(State.Commit, expect);
-                        return true;
-                    }
-                }
+
+        for (ResourceManager rm : rmList) {
+            boolean prepare;
+            String hostName;
+            try {
+                prepare = rm.prepare(xid);
+                hostName = rm.hostName();
+            } catch (RemoteException e) {
+                break;
             }
-        } catch (Exception ignored) {
+            if (prepare) {
+                Log.i("Prepare for %d:[%s]%s", xid, state, hostName);
+                if (state.increaseAndCheck()) {
+                    if (dieTime == DieTime.BEFORE_COMMIT) {
+                        dieNow();
+                    }
+                    state.state(State.Commit, expect);
+                    if (dieTime == DieTime.AFTER_COMMIT) {
+                        dieNow();
+                    }
+                    return true;
+                }
+            } else {
+                break;
+            }
         }
         state.state(State.Abort, expect);
         return false;
@@ -143,8 +171,10 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
 
     @Override
     public boolean abort(long xid) throws RemoteException {
+        recoverLock.readLock().lock();
         Queue<ResourceManager> rmList = xidRMMap.get(xid);
         StateCounter state = xidStateMap.get(xid);
+        recoverLock.readLock().unlock();
         if (rmList == null || state == null) {
             throw new InvalidTransactionException(xid, "no such xid");
         }
@@ -153,8 +183,10 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
     }
 
     private boolean end(long xid, State currentState) {
+        recoverLock.readLock().lock();
         Queue<ResourceManager> rmList = xidRMMap.get(xid);
         StateCounter state = xidStateMap.get(xid);
+        recoverLock.readLock().unlock();
         if (rmList == null || state == null) {
             throw new InvalidTransactionException(xid, "no such xid to " + currentState);
         }
@@ -194,8 +226,10 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
 
     @Override
     public void enlist(long xid, ResourceManager rm) throws RemoteException, IllegalTransactionStateException {
+        recoverLock.readLock().lock();
         Queue<ResourceManager> rms = xidRMMap.get(xid);
         StateCounter state = xidStateMap.get(xid);
+        recoverLock.readLock().unlock();
         if (rms == null || state == null) {
             throw new InvalidTransactionException(xid, "enlist no such xid:" + xid);
         }
@@ -205,6 +239,8 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
                     rms.add(rm);
                 }
                 return;
+            case Prepare:
+                state.updatePrepare();
             case Commit:
             case Abort:
                 end(xid, rm, state);
@@ -229,6 +265,13 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
             boolean result = count.incrementAndGet() >= expect;
             storeLog();
             return result;
+        }
+
+        void updatePrepare() {
+            if (state != State.Prepare) {
+                throw new IllegalStateException("require Prepare state, current state:" + state);
+            }
+            state(count.get() >= expect ? State.Commit : State.Abort, expect);
         }
 
         void state(State state, int expect) {
