@@ -1,8 +1,7 @@
-package transaction;
+package transaction.core;
 
 import transaction.exception.InvalidTransactionException;
 import transaction.exception.TransactionAbortedException;
-import transaction.exception.TransactionManagerUnaccessibleException;
 
 import java.rmi.RemoteException;
 

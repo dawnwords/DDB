@@ -6,7 +6,7 @@
  */
 package transaction.exception;
 
-import transaction.Host;
+import transaction.core.Host;
 
 /**
  * @author RAdmin

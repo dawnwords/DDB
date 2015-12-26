@@ -1,7 +1,8 @@
-package transaction;
+package transaction.host.wc;
 
 import lockmgr.DeadlockException;
 import transaction.bean.*;
+import transaction.core.*;
 import transaction.exception.TransactionAbortedException;
 import transaction.exception.UnaccessibleException;
 import util.Log;

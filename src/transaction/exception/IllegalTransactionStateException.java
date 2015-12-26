@@ -1,6 +1,6 @@
 package transaction.exception;
 
-import transaction.TransactionManager;
+import transaction.core.TransactionManager;
 
 /**
  * Created by Dawnwords on 2015/12/24.

@@ -1,5 +1,9 @@
-package transaction;
+package transaction.host.tm;
 
+import transaction.core.DieTime;
+import transaction.core.Host;
+import transaction.core.ResourceManager;
+import transaction.core.TransactionManager;
 import transaction.exception.IllegalTransactionStateException;
 import transaction.exception.InvalidTransactionException;
 import transaction.exception.TransactionAbortedException;

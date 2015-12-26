@@ -1,6 +1,6 @@
 package test;
 
-import transaction.Host;
+import transaction.core.Host;
 
 import java.rmi.RemoteException;
 

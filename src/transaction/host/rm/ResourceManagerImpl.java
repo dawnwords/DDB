@@ -1,9 +1,13 @@
-package transaction;
+package transaction.host.rm;
 
 import lockmgr.DeadlockException;
 import lockmgr.LockManager;
 import lockmgr.LockType;
 import transaction.bean.ResourceItem;
+import transaction.core.DieTime;
+import transaction.core.Host;
+import transaction.core.ResourceManager;
+import transaction.core.TransactionManager;
 import transaction.exception.*;
 import util.IOUtil;
 import util.Log;
@@ -90,13 +94,13 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     @Override
     public List<ResourceItem<K>> getUpdatedRows(long xid) {
         RMTable<K> table = getXTable(xid, myRMIName.name());
-        return new ArrayList<ResourceItem<K>>(table.table.values());
+        return new ArrayList<ResourceItem<K>>(table.table().values());
     }
 
     @Override
     public List<ResourceItem<K>> getUpdatedRows() {
         RMTable<K> table = getMainTable(myRMIName.name());
-        return new ArrayList<ResourceItem<K>>(table.table.values());
+        return new ArrayList<ResourceItem<K>>(table.table().values());
     }
 
     @Override

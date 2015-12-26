@@ -1,4 +1,4 @@
-package transaction;
+package transaction.host.rm;
 
 import java.rmi.RemoteException;
 

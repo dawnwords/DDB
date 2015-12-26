@@ -1,4 +1,4 @@
-package transaction;
+package transaction.core;
 
 import lockmgr.DeadlockException;
 import transaction.bean.ResourceItem;

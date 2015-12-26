@@ -1,4 +1,4 @@
-package transaction;
+package transaction.core;
 
 import transaction.exception.IllegalTransactionStateException;
 import transaction.exception.TransactionAbortedException;

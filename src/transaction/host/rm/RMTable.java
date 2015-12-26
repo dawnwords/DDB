@@ -4,7 +4,7 @@
  * TODO To change the template for this generated file go to
  * Window - Preferences - Java - Code Style - Code Templates
  */
-package transaction;
+package transaction.host.rm;
 
 import lockmgr.DeadlockException;
 import lockmgr.LockManager;
@@ -18,23 +18,27 @@ import java.util.Map;
 import java.util.Set;
 
 public class RMTable<K> implements Serializable {
-    protected Hashtable<K, ResourceItem<K>> table = new Hashtable<K, ResourceItem<K>>();
+    private Hashtable<K, ResourceItem<K>> table = new Hashtable<K, ResourceItem<K>>();
 
-    transient protected RMTable<K> parent;
+    transient private RMTable<K> parent;
 
-    protected Hashtable<K, LockType> locks = new Hashtable<K, LockType>();
+    private Hashtable<K, LockType> locks = new Hashtable<K, LockType>();
 
-    transient protected LockManager lm;
+    transient private LockManager lm;
 
-    protected String tableName;
+    private String tableName;
 
-    protected long xid;
+    private long xid;
 
     public RMTable(String tableName, RMTable<K> parent, long xid, LockManager lm) {
         this.xid = xid;
         this.tableName = tableName;
         this.parent = parent;
         this.lm = lm;
+    }
+
+    public Hashtable<K, ResourceItem<K>> table() {
+        return table;
     }
 
     public void setLockManager(LockManager lm) {

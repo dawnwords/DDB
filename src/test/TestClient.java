@@ -1,7 +1,7 @@
 package test;
 
-import transaction.Host;
-import transaction.WorkflowController;
+import transaction.core.Host;
+import transaction.core.WorkflowController;
 import util.IOUtil;
 import util.Log;
 
@@ -61,8 +61,7 @@ public abstract class TestClient {
 
     public void test() {
         run();
-        Log.iln();
-        Log.i("[Table & Logs]");
+        System.out.println("[Table & Logs]");
 
         File dir = new File(".");
         for (File file : dir.listFiles()) {
@@ -72,7 +71,7 @@ public abstract class TestClient {
                     if (log.isFile()) {
                         Object o = IOUtil.readObject(log.getAbsolutePath());
                         if (o != null) {
-                            Log.i("%s->%s", o.getClass().getSimpleName(), o);
+                            System.out.printf("%s->%s\n", o.getClass().getSimpleName(), o);
                         }
                     }
                 }
