@@ -254,19 +254,6 @@ public interface WorkflowController extends Remote {
     //////////
 
     /**
-     * If some component has died and was restarted, this function is
-     * called to refresh the RMI references so that everybody can talk
-     * to everybody else again.  Specifically, the WC should reconnect
-     * to all other components, and each RM's reconnect() is called so
-     * that the RM can reconnect to the TM.
-     * <p/>
-     * This method is used for testing and is not part of a transaction.
-     *
-     * @return true on success, false on failure. (some component not up yet...)
-     */
-    boolean reconnect() throws RemoteException;
-
-    /**
      * Kill the component immediately.  Used to simulate a system
      * failure such as a power outage.
      * <p/>
@@ -357,8 +344,4 @@ public interface WorkflowController extends Remote {
      * @return true on success, false on failure.
      */
     boolean dieTMAfterCommit() throws RemoteException;
-
-    void ping() throws RemoteException;
-
-    boolean dieNow() throws RemoteException;
 }
