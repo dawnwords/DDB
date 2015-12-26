@@ -11,6 +11,11 @@ import transaction.core.Host;
 
 import java.rmi.RemoteException;
 
+/**
+ * The RM of Reservations
+ * <p/>
+ * Created by Dawnwords on 2015/12/18.
+ */
 public class RMManagerReservations extends ResourceManagerImpl<ReservationKey> {
     public RMManagerReservations() throws RemoteException {
         super(Host.HostName.RMReservations);

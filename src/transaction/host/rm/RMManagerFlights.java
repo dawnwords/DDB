@@ -10,6 +10,11 @@ import transaction.core.Host;
 
 import java.rmi.RemoteException;
 
+/**
+ * The RM of Flights
+ * <p/>
+ * Created by Dawnwords on 2015/12/18.
+ */
 public class RMManagerFlights extends ResourceManagerImpl<String> {
     public RMManagerFlights() throws RemoteException {
         super(Host.HostName.RMFlights);

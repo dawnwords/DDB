@@ -3,6 +3,8 @@ package transaction.host.rm;
 import java.rmi.RemoteException;
 
 /**
+ * The RM of Customers
+ * <p/>
  * Created by Dawnwords on 2015/12/18.
  */
 public class RMManagerCustomers extends ResourceManagerImpl<String> {
