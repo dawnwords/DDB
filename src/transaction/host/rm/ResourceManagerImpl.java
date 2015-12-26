@@ -23,7 +23,8 @@ import java.util.Hashtable;
 import java.util.List;
 
 /**
- * Resource Manager for the Distributed Travel Reservation System.
+ * Implementation of Resource Manager for the Distributed Travel Reservation System,
+ * where <code>K</code> is the type of the key of the ResourceItem Managed by RM
  * <p/>
  * Description: toy implementation of the RM
  */
@@ -50,50 +51,12 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         bindRMIRegistry();
     }
 
-    private void recover() {
-        HashSet<Long> tXids = loadTransactionLogs();
-        if (tXids != null) {
-            xids = tXids;
-        }
-
-        File dataDir = new File(myRMIName.name());
-        if (!dataDir.exists()) {
-            dataDir.mkdirs();
-        }
-        File[] dataFiles = dataDir.listFiles();
-
-        if (dataFiles != null) {
-            for (File dataFile : dataFiles) {
-                if (dataFile.isDirectory()) {
-                    recoverXTableDir(dataFile);
-                } else if (!dataFile.getName().equals(TRANSACTION_LOG_FILENAME)) {
-                    //recover main table
-                    getMainTable(dataFile.getName());
-                }
-            }
-        }
-    }
-
-    private void recoverXTableDir(File xTableDir) {
-        long xid = Long.parseLong(xTableDir.getName());
-        if (!xids.contains(xid)) {
-            throw new IllegalStateException("RM Recover Error: unexpected xid " + xid);
-        }
-        File[] xDataFiles = xTableDir.listFiles();
-        if (xDataFiles != null) {
-            for (File xData : xDataFiles) {
-                RMTable xTable = getXTable(xid, xData.getName());
-                try {
-                    xTable.relockAll();
-                } catch (DeadlockException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-        }
-    }
-
+    /*
+     *  Interfaces from Remote
+     */
     @Override
     public boolean dieNow() throws RemoteException {
+        // reset all the states
         hasDead = true;
         tmDaemon.interrupt();
         xids.clear();
@@ -105,6 +68,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
 
     @Override
     public boolean reconnect() {
+        // if dieNow() is invoked before this point, recover the states
         if (hasDead) {
             Log.i("%s reconnected", myRMIName.name());
             dieTime = DieTime.NO_DIE;
@@ -118,57 +82,9 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         return true;
     }
 
-    public TransactionManager getTransactionManager() throws TransactionManagerUnaccessibleException {
-        return tmDaemon.get();
-    }
-
-    private RMTable<K> loadTable(long xid, String tableName) {
-        return IOUtil.readObject(myRMIName.name() + File.separator + (xid == -1 ? "" : xid + File.separator) + tableName);
-    }
-
-    private boolean storeTable(long xid, String tableName, RMTable table) {
-        return IOUtil.writeObject(myRMIName.name() + File.separator + xid, tableName, table);
-    }
-
-    private RMTable<K> getXTable(long xid, String tableName) {
-        Hashtable<String, RMTable<K>> xidTables;
-        synchronized (tables) {
-            xidTables = tables.get(xid);
-            if (xidTables == null) {
-                xidTables = new Hashtable<String, RMTable<K>>();
-                tables.put(xid, xidTables);
-            }
-        }
-        synchronized (xidTables) {
-            RMTable<K> table = xidTables.get(tableName);
-            if (table != null) {
-                return table;
-            }
-            table = loadTable(xid, tableName);
-            if (table == null) {
-                table = new RMTable<K>(tableName, xid == -1 ? null : getMainTable(tableName), xid, lm);
-            } else {
-                if (xid != -1) {
-                    table.setLockManager(lm);
-                    table.setParent(getMainTable(tableName));
-                }
-            }
-            xidTables.put(tableName, table);
-            return table;
-        }
-    }
-
-    private RMTable<K> getMainTable(String tableName) {
-        return getXTable(-1, tableName);
-    }
-
-    private HashSet<Long> loadTransactionLogs() {
-        return IOUtil.readObject(myRMIName.name() + File.separator + TRANSACTION_LOG_FILENAME);
-    }
-
-    private boolean storeTransactionLogs(HashSet<Long> xids) {
-        return IOUtil.writeObject(myRMIName.name(), TRANSACTION_LOG_FILENAME, xids);
-    }
+    /*
+     * Interfaces form RM for date access
+     */
 
     @Override
     public List<ResourceItem<K>> query(long xid) throws DeadlockException, RemoteException {
@@ -300,6 +216,97 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         return n;
     }
 
+    private void recover() {
+        HashSet<Long> tXids = loadTransactionLogs();
+        if (tXids != null) {
+            xids = tXids;
+        }
+
+        File dataDir = new File(myRMIName.name());
+        if (!dataDir.exists()) {
+            dataDir.mkdirs();
+        }
+        File[] dataFiles = dataDir.listFiles();
+
+        if (dataFiles != null) {
+            for (File dataFile : dataFiles) {
+                if (dataFile.isDirectory()) {
+                    recoverXTableDir(dataFile);
+                } else if (!dataFile.getName().equals(TRANSACTION_LOG_FILENAME)) {
+                    //recover main table
+                    getMainTable(dataFile.getName());
+                }
+            }
+        }
+    }
+
+    private void recoverXTableDir(File xTableDir) {
+        long xid = Long.parseLong(xTableDir.getName());
+        if (!xids.contains(xid)) {
+            throw new IllegalStateException("RM Recover Error: unexpected xid " + xid);
+        }
+        File[] xDataFiles = xTableDir.listFiles();
+        if (xDataFiles != null) {
+            for (File xData : xDataFiles) {
+                RMTable xTable = getXTable(xid, xData.getName());
+                try {
+                    xTable.relockAll();
+                } catch (DeadlockException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+    }
+
+    private RMTable<K> loadTable(long xid, String tableName) {
+        return IOUtil.readObject(myRMIName.name() + File.separator + (xid == -1 ? "" : xid + File.separator) + tableName);
+    }
+
+    private boolean storeTable(long xid, String tableName, RMTable table) {
+        return IOUtil.writeObject(myRMIName.name() + File.separator + xid, tableName, table);
+    }
+
+    private RMTable<K> getXTable(long xid, String tableName) {
+        Hashtable<String, RMTable<K>> xidTables;
+        synchronized (tables) {
+            xidTables = tables.get(xid);
+            if (xidTables == null) {
+                xidTables = new Hashtable<String, RMTable<K>>();
+                tables.put(xid, xidTables);
+            }
+        }
+        synchronized (xidTables) {
+            RMTable<K> table = xidTables.get(tableName);
+            if (table != null) {
+                return table;
+            }
+            table = loadTable(xid, tableName);
+            if (table == null) {
+                table = new RMTable<K>(tableName, xid == -1 ? null : getMainTable(tableName), xid, lm);
+            } else {
+                if (xid != -1) {
+                    table.setLockManager(lm);
+                    table.setParent(getMainTable(tableName));
+                }
+            }
+            xidTables.put(tableName, table);
+            return table;
+        }
+    }
+
+    private RMTable<K> getMainTable(String tableName) {
+        return getXTable(-1, tableName);
+    }
+
+    private HashSet<Long> loadTransactionLogs() {
+        return IOUtil.readObject(myRMIName.name() + File.separator + TRANSACTION_LOG_FILENAME);
+    }
+
+    private boolean storeTransactionLogs(HashSet<Long> xids) {
+        return IOUtil.writeObject(myRMIName.name(), TRANSACTION_LOG_FILENAME, xids);
+    }
+
+
     private void addXid(long xid) throws RemoteException {
         ping();
         if (xid < 0) {
@@ -312,7 +319,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         }
 
         try {
-            getTransactionManager().enlist(xid, this);
+            tmDaemon.get().enlist(xid, this);
         } catch (IllegalTransactionStateException e) {
             Log.e(e.getMessage());
         }
@@ -322,12 +329,9 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         }
     }
 
-    private void checkDie(DieTime dieTime) throws RemoteException {
-        ping();
-        if (this.dieTime == dieTime) {
-            dieNow();
-        }
-    }
+    /*
+     * Interfaces from RM for commit and abort
+     */
 
     @Override
     public boolean prepare(long xid) throws RemoteException {
@@ -355,6 +359,13 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     public void abort(long xid) throws RemoteException {
         checkDie(DieTime.BEFORE_ABORT);
         end(xid, false);
+    }
+
+    private void checkDie(DieTime dieTime) throws RemoteException {
+        ping();
+        if (this.dieTime == dieTime) {
+            dieNow();
+        }
     }
 
     private void end(long xid, boolean commit) throws RemoteException {
@@ -400,6 +411,10 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
         }
     }
 
+    /**
+     * The Daemon Thread to check if TM is alive
+     * by invoke <code>TM.ping()</code> in a way of round-robin
+     */
     private class TMDaemon extends Thread {
 
         TransactionManager tm;
