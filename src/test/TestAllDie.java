@@ -36,7 +36,7 @@ public class TestAllDie extends TestClient {
             assertTrue("No Flight Add", wc().queryFlight(xid, "427") == -1);
             assertTrue("No Room Add", wc().queryRooms(xid, "SFW") == -1);
             assertTrue("No Customer And Reservation Add", wc().queryCustomerBill(xid, "Harry") == -1);
-            assertTrue("Commmit", wc().commit(xid));
+            assertTrue("Commit", wc().commit(xid));
         } catch (Exception e) {
             e.printStackTrace();
         }

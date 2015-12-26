@@ -296,7 +296,7 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         ResourceManager flightRM = rm(HostName.RMFlights);
         try {
             List<ResourceItem<ReservationKey>> reservations = reservationRM.query(xid, "custName", custName);
-            if (reservations == null || reservations.isEmpty()) {
+            if (reservations == null) {
                 return -1;
             }
             int result = 0;
