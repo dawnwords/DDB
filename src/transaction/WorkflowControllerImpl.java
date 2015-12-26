@@ -294,7 +294,11 @@ public class WorkflowControllerImpl extends Host implements WorkflowController {
         ResourceManager carRM = rm(HostName.RMCars);
         ResourceManager hotelRM = rm(HostName.RMRooms);
         ResourceManager flightRM = rm(HostName.RMFlights);
+        ResourceManager customerRM = rm(HostName.RMCustomers);
         try {
+            if(customerRM.query(xid, custName) == null) {
+                return -1;
+            }
             List<ResourceItem<ReservationKey>> reservations = reservationRM.query(xid, "custName", custName);
             if (reservations == null) {
                 return -1;
