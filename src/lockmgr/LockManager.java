@@ -43,6 +43,7 @@ public class LockManager {
             lockEntry = new LockEntry(dataKey);
             keyLockEntryMap.put(dataKey, lockEntry);
         }
+        // wake up deadlock monitor thread
         monitorThread.wake();
 
         Queue<String> keys = tidKeyMap.get(tid);
@@ -100,6 +101,9 @@ public class LockManager {
                 keyLockEntryMap);
     }
 
+    /**
+     * Deadlock Monitor Thread
+     */
     private class MonitorThread extends Thread {
 
         private final Object mutex = new Object();
@@ -113,11 +117,13 @@ public class LockManager {
             while (!stop) {
                 Iterator<String> iterator = keyLockEntryMap.keySet().iterator();
                 if (iterator.hasNext()) {
+                    // get the earliest lockEntry
                     String key = iterator.next();
                     LockEntry earliestLockEntry = keyLockEntryMap.get(key);
                     if (earliestLockEntry == null) {
                         throw new IllegalStateException("no lock entry for key:" + key);
                     }
+                    // check deadlock remaining time
                     long deadlockRemaining = earliestLockEntry.deadlockRemaining();
                     Log.i("[%s]deadlock Remaining:%dms", key, deadlockRemaining);
                     if (deadlockRemaining <= 0) {
@@ -129,6 +135,7 @@ public class LockManager {
                         }
                     }
                 } else {
+                    // no lock entry, then pend till one inserted
                     Log.i("pend");
                     printLockState();
                     pend();
