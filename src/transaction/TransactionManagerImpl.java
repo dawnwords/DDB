@@ -27,7 +27,6 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
     private ConcurrentHashMap<Long, Queue<ResourceManager>> xidRMMap;
     private ConcurrentHashMap<Long, StateCounter> xidStateMap;
     private ReentrantReadWriteLock logLock, recoverLock;
-    private volatile boolean hasDead;
 
     protected TransactionManagerImpl() throws RemoteException {
         super(HostName.TM);
@@ -76,13 +75,6 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
     }
 
     @Override
-    public void ping() throws RemoteException {
-        if (hasDead) {
-            throw new TransactionManagerUnaccessibleException();
-        }
-    }
-
-    @Override
     public boolean dieNow() throws RemoteException {
         hasDead = true;
         recoverLock.writeLock().lock();
@@ -103,6 +95,7 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
 
     @Override
     public boolean start(long xid) throws RemoteException {
+        ping();
         recoverLock.writeLock().lock();
         if (xidStateMap.get(xid) != null) {
             return false;
@@ -116,6 +109,7 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
 
     @Override
     public boolean commit(long xid) throws RemoteException, TransactionAbortedException {
+        ping();
         if (prepare(xid)) {
             return end(xid, State.Commit);
         } else {
@@ -171,6 +165,7 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
 
     @Override
     public boolean abort(long xid) throws RemoteException {
+        ping();
         recoverLock.readLock().lock();
         Queue<ResourceManager> rmList = xidRMMap.get(xid);
         StateCounter state = xidStateMap.get(xid);
@@ -226,6 +221,7 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
 
     @Override
     public void enlist(long xid, ResourceManager rm) throws RemoteException, IllegalTransactionStateException {
+        ping();
         recoverLock.readLock().lock();
         Queue<ResourceManager> rms = xidRMMap.get(xid);
         StateCounter state = xidStateMap.get(xid);
@@ -233,6 +229,7 @@ public class TransactionManagerImpl extends Host implements TransactionManager {
         if (rms == null || state == null) {
             throw new InvalidTransactionException(xid, "enlist no such xid:" + xid);
         }
+        Log.i("Enlist for %d: rm:%s, state:%s", xid, rm.hostName(), state);
         switch (state.state) {
             case Start:
                 if (!rms.contains(rm)) {

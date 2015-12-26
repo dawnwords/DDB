@@ -1,5 +1,7 @@
 package transaction;
 
+import transaction.exception.ResourceManagerUnaccessibleException;
+import transaction.exception.TransactionManagerUnaccessibleException;
 import util.Log;
 
 import java.io.FileInputStream;
@@ -16,13 +18,11 @@ import java.util.Properties;
 public abstract class Host extends UnicastRemoteObject {
     protected HostName myRMIName;
     protected DieTime dieTime;
+    protected volatile boolean hasDead;
 
     protected Host(HostName rmiName) throws RemoteException {
         dieTime = DieTime.NO_DIE;
         myRMIName = rmiName;
-    }
-
-    public void ping() throws RemoteException {
     }
 
     public void setDieTime(DieTime dieTime) throws RemoteException {
@@ -73,6 +73,14 @@ public abstract class Host extends UnicastRemoteObject {
             throw new RuntimeException(e);
         }
         return prop;
+    }
+
+    public void ping() throws RemoteException {
+        if (hasDead) {
+            throw myRMIName == HostName.TM ?
+                    new TransactionManagerUnaccessibleException() :
+                    new ResourceManagerUnaccessibleException(myRMIName);
+        }
     }
 
     public enum HostName {

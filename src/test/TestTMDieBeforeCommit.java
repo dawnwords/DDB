@@ -5,9 +5,9 @@ import java.rmi.RemoteException;
 /**
  * Created by Dawnwords on 2015/12/25.
  */
-public class TestDieBeforeCommitRollForward extends BaseClient {
+public class TestTMDieBeforeCommit extends BaseClient {
     public static void main(String[] args) {
-        new TestDieBeforeCommitRollForward().test();
+        new TestTMDieBeforeCommit().test();
     }
 
     @Override
@@ -31,9 +31,9 @@ public class TestDieBeforeCommitRollForward extends BaseClient {
                 wc().commit(xid);
                 assertTrue("Commit Must Fail", false);
             } catch (RemoteException e) {
-                System.out.println("Transaction Commit Fail For TM Died.");
+                System.out.println("Transaction Commit Fail For TM Died. Wait for 2s to notice RM");
+                Thread.sleep(2000);
                 assertTrue("WC reconnect", wc().reconnect());
-                Thread.sleep(500);
             }
 
             System.out.println("After Reconnection, Former Transaction Roll Forward.");

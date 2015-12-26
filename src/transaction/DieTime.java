@@ -5,8 +5,4 @@ package transaction;
  */
 public enum DieTime {
     AFTER_ENLIST, BEFORE_PREPARE, AFTER_PREPARE, BEFORE_COMMIT, BEFORE_ABORT, AFTER_COMMIT, NO_DIE;
-
-    public boolean alreadyDied(DieTime dieTime) {
-        return ordinal() < dieTime.ordinal();
-    }
 }

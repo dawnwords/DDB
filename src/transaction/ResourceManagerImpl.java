@@ -35,6 +35,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
 
     public void start() {
         recover();
+        lm.start();
         tmDaemon.start();
         bindRMIRegistry();
     }
@@ -105,25 +106,27 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
 
     @Override
     public boolean dieNow() throws RemoteException {
+        hasDead = true;
         tmDaemon.interrupt();
         xids.clear();
         tables.clear();
-        lm = new LockManager();
+        lm.shutdown();
         Log.i(myRMIName.name() + " died");
         throw new ResourceManagerUnaccessibleException(myRMIName);
     }
 
     @Override
     public boolean reconnect() {
-        Log.i("%s reconnected", myRMIName.name());
-        dieTime = DieTime.NO_DIE;
-        recover();
-        tmDaemon = new TMDaemon();
-        tmDaemon.start();
-        try {
-            Thread.sleep(500);
-        } catch (InterruptedException ignored) {
+        if (hasDead) {
+            Log.i("%s reconnected", myRMIName.name());
+            dieTime = DieTime.NO_DIE;
+            recover();
+            tmDaemon = new TMDaemon();
+            lm = new LockManager();
+            tmDaemon.start();
+            lm.start();
         }
+        hasDead = false;
         return true;
     }
 
@@ -181,6 +184,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
 
     @Override
     public List<ResourceItem<K>> query(long xid) throws DeadlockException, RemoteException {
+        ping();
         try {
             return query(xid, null, null);
         } catch (InvalidIndexException ignored) {
@@ -313,6 +317,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     private void addXid(long xid) throws RemoteException {
+        ping();
         if (xid < 0) {
             throw new InvalidTransactionException(xid, "Xid must be positive.");
         }
@@ -334,9 +339,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     }
 
     private void checkDie(DieTime dieTime) throws RemoteException {
-        if (this.dieTime.alreadyDied(dieTime)) {
-            throw new ResourceManagerUnaccessibleException(myRMIName);
-        }
+        ping();
         if (this.dieTime == dieTime) {
             dieNow();
         }
@@ -416,6 +419,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     private class TMDaemon extends Thread {
 
         TransactionManager tm;
+        boolean tmFailed;
 
         @Override
         public void run() {
@@ -439,7 +443,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
             } catch (Exception e) {
                 tm = null;
             }
-            if (tm == null) {
+            if (tm == null || tmFailed) {
                 reconnect();
             }
             if (tm == null) {
@@ -449,7 +453,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
             return tm;
         }
 
-        boolean reconnect() {
+        void reconnect() {
             try {
                 tm = (TransactionManager) lookUp(HostName.TM);
                 Log.i(myRMIName + "'s xids is Empty ? " + xids.isEmpty());
@@ -461,11 +465,11 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
                     }
                 }
                 Log.i(myRMIName + " bound to TM");
+                tmFailed = false;
             } catch (Exception e) {
                 Log.e(myRMIName + " enlist error:" + e);
-                return false;
+                tmFailed = true;
             }
-            return true;
         }
     }
 }
