@@ -8,13 +8,19 @@ import transaction.core.DieTime;
 import transaction.core.Host;
 import transaction.core.ResourceManager;
 import transaction.core.TransactionManager;
-import transaction.exception.*;
+import transaction.exception.IllegalTransactionStateException;
+import transaction.exception.InvalidTransactionException;
+import transaction.exception.ResourceManagerUnaccessibleException;
+import transaction.exception.TransactionManagerUnaccessibleException;
 import util.IOUtil;
 import util.Log;
 
 import java.io.File;
 import java.rmi.RemoteException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Hashtable;
+import java.util.List;
 
 /**
  * Resource Manager for the Distributed Travel Reservation System.
@@ -84,28 +90,6 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
                 }
             }
         }
-    }
-
-    @Override
-    public Set getTransactions() {
-        return xids;
-    }
-
-    @Override
-    public List<ResourceItem<K>> getUpdatedRows(long xid) {
-        RMTable<K> table = getXTable(xid, myRMIName.name());
-        return new ArrayList<ResourceItem<K>>(table.table().values());
-    }
-
-    @Override
-    public List<ResourceItem<K>> getUpdatedRows() {
-        RMTable<K> table = getMainTable(myRMIName.name());
-        return new ArrayList<ResourceItem<K>>(table.table().values());
-    }
-
-    @Override
-    public String getID() throws RemoteException {
-        return myRMIName.name();
     }
 
     @Override
@@ -189,11 +173,7 @@ public class ResourceManagerImpl<K> extends Host implements ResourceManager<K> {
     @Override
     public List<ResourceItem<K>> query(long xid) throws DeadlockException, RemoteException {
         ping();
-        try {
-            return query(xid, null, null);
-        } catch (InvalidIndexException ignored) {
-        }
-        return null;
+        return query(xid, null, null);
     }
 
     @Override
